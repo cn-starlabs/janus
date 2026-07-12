@@ -1,0 +1,16 @@
+[package]
+name = "janus-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "janus_ffi"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+janus-core = { path = "../janus-core" }
+janus-io = { path = "../janus-io" }
+janus-kinetic = { path = "../janus-kinetic" }
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -36,8 +36,16 @@ impl VelocityGrid3D {
     /// `n_per_axis^3` total nodes; callers should keep `n_per_axis` modest
     /// (e.g. 6-10) since the 3D tensor product grows the node count as the
     /// cube of the 1D rule's order.
-    pub fn gauss_hermite(r_gas: f64, t_ref: f64, u_ref: [f64; 3], n_per_axis: usize) -> (Vec<[f64; 3]>, Vec<f64>) {
-        assert!(n_per_axis >= 2, "gauss_hermite needs at least 2 nodes per axis");
+    pub fn gauss_hermite(
+        r_gas: f64,
+        t_ref: f64,
+        u_ref: [f64; 3],
+        n_per_axis: usize,
+    ) -> (Vec<[f64; 3]>, Vec<f64>) {
+        assert!(
+            n_per_axis >= 2,
+            "gauss_hermite needs at least 2 nodes per axis"
+        );
 
         // Three independent 1D physical-space Gauss-Hermite axes (shared
         // single-source generator `gauss_hermite_1d_axis`, true integration

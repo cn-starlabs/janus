@@ -172,7 +172,18 @@ impl Particles {
         t: f64,
         r_gas: f64,
     ) {
-        self.sample_cell_with_dof(rng, cell, cell_center, half_extent, n, rho_vol, u, t, r_gas, crate::maxwellian::DOF)
+        self.sample_cell_with_dof(
+            rng,
+            cell,
+            cell_center,
+            half_extent,
+            n,
+            rho_vol,
+            u,
+            t,
+            r_gas,
+            crate::maxwellian::DOF,
+        )
     }
 
     /// Polyatomic/internal-DOF-generalized particle sampler: identical
@@ -243,7 +254,11 @@ impl Particles {
             mom[1] += self.weight[i] * self.vel[i][1];
         }
         let mass_batch: f64 = self.weight[start..end].iter().sum();
-        let mean_u = if mass_batch > 0.0 { [mom[0] / mass_batch, mom[1] / mass_batch] } else { [0.0, 0.0] };
+        let mean_u = if mass_batch > 0.0 {
+            [mom[0] / mass_batch, mom[1] / mass_batch]
+        } else {
+            [0.0, 0.0]
+        };
         // Shift so sampled mean velocity exactly equals u.
         for i in start..end {
             self.vel[i][0] += u[0] - mean_u[0];
@@ -290,7 +305,13 @@ impl Particles {
     /// the Bernoulli trial and marks which particles need replacement,
     /// returning the list of (index) that must be re-sampled; velocities of
     /// particles that are NOT replaced are left untouched.
-    pub fn mark_for_collision(&self, rng: &mut Rng, tau_of_cell: impl Fn(u32) -> f64, dt: f64, out_indices: &mut Vec<usize>) {
+    pub fn mark_for_collision(
+        &self,
+        rng: &mut Rng,
+        tau_of_cell: impl Fn(u32) -> f64,
+        dt: f64,
+        out_indices: &mut Vec<usize>,
+    ) {
         out_indices.clear();
         for i in 0..self.len() {
             let tau = tau_of_cell(self.cell[i]).max(1e-300);
@@ -373,8 +394,10 @@ impl Particles {
             self.pos[i] = p;
             self.vel[i] = v;
             self.zeta[i] = z;
-            let i_idx = (((p[0] - ox) / grid.dx).floor() as isize).clamp(0, grid.nx as isize - 1) as usize;
-            let j_idx = (((p[1] - oy) / grid.dy).floor() as isize).clamp(0, grid.ny as isize - 1) as usize;
+            let i_idx =
+                (((p[0] - ox) / grid.dx).floor() as isize).clamp(0, grid.nx as isize - 1) as usize;
+            let j_idx =
+                (((p[1] - oy) / grid.dy).floor() as isize).clamp(0, grid.ny as isize - 1) as usize;
             self.cell[i] = grid.idx(i_idx, j_idx) as u32;
             i += 1;
         }
@@ -393,7 +416,17 @@ mod tests {
         let u = [10.0, -3.0];
         let t = 350.0;
         let r_gas = 208.13;
-        particles.sample_cell(&mut rng, 0, [0.5, 0.5], [0.5, 0.5], 1000, rho_vol, u, t, r_gas);
+        particles.sample_cell(
+            &mut rng,
+            0,
+            [0.5, 0.5],
+            [0.5, 0.5],
+            1000,
+            rho_vol,
+            u,
+            t,
+            r_gas,
+        );
 
         let (mass, px, py, e) = particles.totals();
         assert!((mass - rho_vol).abs() < 1e-9, "mass {mass} vs {rho_vol}");
@@ -402,7 +435,10 @@ mod tests {
         let kinetic = 0.5 * rho_vol * (u[0] * u[0] + u[1] * u[1]);
         let internal = 0.5 * rho_vol * crate::maxwellian::DOF * r_gas * t;
         let expected_e = kinetic + internal;
-        assert!((e - expected_e).abs() / expected_e < 1e-6, "e {e} vs {expected_e}");
+        assert!(
+            (e - expected_e).abs() / expected_e < 1e-6,
+            "e {e} vs {expected_e}"
+        );
     }
 
     #[test]
@@ -421,7 +457,18 @@ mod tests {
         let r_gas = 296.8;
         let dof_total = crate::maxwellian::dof_with_internal(2.0);
         assert!((dof_total - 5.0).abs() < 1e-12);
-        particles.sample_cell_with_dof(&mut rng, 0, [0.5, 0.5], [0.5, 0.5], 1000, rho_vol, u, t, r_gas, dof_total);
+        particles.sample_cell_with_dof(
+            &mut rng,
+            0,
+            [0.5, 0.5],
+            [0.5, 0.5],
+            1000,
+            rho_vol,
+            u,
+            t,
+            r_gas,
+            dof_total,
+        );
 
         let (mass, px, py, e) = particles.totals();
         assert!((mass - rho_vol).abs() < 1e-9, "mass {mass} vs {rho_vol}");
@@ -430,7 +477,10 @@ mod tests {
         let kinetic = 0.5 * rho_vol * (u[0] * u[0] + u[1] * u[1]);
         let internal = 0.5 * rho_vol * dof_total * r_gas * t;
         let expected_e = kinetic + internal;
-        assert!((e - expected_e).abs() / expected_e < 1e-6, "e {e} vs {expected_e}");
+        assert!(
+            (e - expected_e).abs() / expected_e < 1e-6,
+            "e {e} vs {expected_e}"
+        );
     }
 
     #[test]

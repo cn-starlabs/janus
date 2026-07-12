@@ -162,7 +162,7 @@ impl FastSpectralCollision {
         let n = grid.n;
         let ntot = grid.ntotal();
         let r = grid.l * 0.5; // truncation radius R (L = 2R periodization)
-        // Grid angular wavevectors per axis: xi = pi * signed_freq / l.
+                              // Grid angular wavevectors per axis: xi = pi * signed_freq / l.
         let xi_axis: Vec<f64> = (0..n)
             .map(|b| std::f64::consts::PI * fft_freq(b, n) as f64 / grid.l)
             .collect();
@@ -184,7 +184,10 @@ impl FastSpectralCollision {
         let nq = 200usize;
         let drho = r / nq as f64;
         let rho_nodes: Vec<f64> = (0..nq).map(|q| (q as f64 + 0.5) * drho).collect();
-        let rho_w: Vec<f64> = rho_nodes.iter().map(|&rho| 2.0 * rho.powf(gamma) * drho).collect();
+        let rho_w: Vec<f64> = rho_nodes
+            .iter()
+            .map(|&rho| 2.0 * rho.powf(gamma) * drho)
+            .collect();
         // Closed forms for the common kernels (exact, and -- crucially for
         // gamma=1 where a=b -- keeping phi_a IDENTICAL to phi_b, which the
         // structural conservation relies on); numerical rho-quadrature otherwise.
@@ -335,7 +338,15 @@ fn fft_freq(bin: usize, n: usize) -> isize {
 // uniformity: `equilibrium` forwards to the ordinary Maxwellian, matching what a
 // converged Boltzmann solution relaxes to.
 impl crate::collision3d::Collision3D for FastSpectralCollision {
-    fn equilibrium(&self, rho: f64, u: [f64; 3], t: f64, r_gas: f64, _q: [f64; 3], v: [f64; 3]) -> f64 {
+    fn equilibrium(
+        &self,
+        rho: f64,
+        u: [f64; 3],
+        t: f64,
+        r_gas: f64,
+        _q: [f64; 3],
+        v: [f64; 3],
+    ) -> f64 {
         crate::maxwellian3d::maxwellian_3d(rho, u, t, r_gas, v)
     }
 }
@@ -394,7 +405,9 @@ mod tests {
             let v = grid.velocity_at(i);
             let c = [v[0] - 0.5, v[1] + 0.3, v[2]];
             let c2 = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
-            f[i] = (2.0 * std::f64::consts::PI).powf(-1.5) * (-c2 / 2.0).exp() * (1.0 + 0.1 * (v[0]).sin());
+            f[i] = (2.0 * std::f64::consts::PI).powf(-1.5)
+                * (-c2 / 2.0).exp()
+                * (1.0 + 0.1 * (v[0]).sin());
         }
         let mut q = vec![0.0; n];
         op.apply_to_distribution(&f, &mut q);
@@ -418,8 +431,16 @@ mod tests {
         }
         en_q *= dv3;
         assert!(mass_q.abs() / mass_f < 1e-6, "mass not conserved: {mass_q}");
-        assert!(mom_q[0].abs() / mass_f < 1e-4, "x-momentum not conserved: {}", mom_q[0]);
-        assert!(mom_q[1].abs() / mass_f < 1e-4, "y-momentum not conserved: {}", mom_q[1]);
+        assert!(
+            mom_q[0].abs() / mass_f < 1e-4,
+            "x-momentum not conserved: {}",
+            mom_q[0]
+        );
+        assert!(
+            mom_q[1].abs() / mass_f < 1e-4,
+            "y-momentum not conserved: {}",
+            mom_q[1]
+        );
         assert!(en_q.abs() / mass_f < 1e-4, "energy not conserved: {en_q}");
     }
 
@@ -441,6 +462,9 @@ mod tests {
         let mut q = vec![0.0; n];
         op.apply_to_distribution(&f, &mut q);
         let hdot: f64 = (0..n).map(|i| q[i] * f[i].ln()).sum::<f64>() * grid.dv3();
-        assert!(hdot <= 1e-6, "H-functional increased (entropy production positive): hdot={hdot}");
+        assert!(
+            hdot <= 1e-6,
+            "H-functional increased (entropy production positive): hdot={hdot}"
+        );
     }
 }

@@ -58,7 +58,11 @@ impl MacroFields3D {
     #[inline]
     pub fn velocity(&self, c: usize) -> [f64; 3] {
         let rho = self.rho[c].max(f64::MIN_POSITIVE);
-        [self.mom[0][c] / rho, self.mom[1][c] / rho, self.mom[2][c] / rho]
+        [
+            self.mom[0][c] / rho,
+            self.mom[1][c] / rho,
+            self.mom[2][c] / rho,
+        ]
     }
 
     /// Temperature from ideal-gas EOS: `E = rho*(|u|^2/2) + rho*dof/2*R*T`.

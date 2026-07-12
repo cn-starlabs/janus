@@ -12,3 +12,5 @@ path = "src/main.rs"
 janus-core = { path = "../janus-core" }
 janus-io = { path = "../janus-io" }
 janus-kinetic = { path = "../janus-kinetic" }
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -118,6 +118,9 @@ mod tests {
         let kinetic = 0.5 * rho * (u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
         let internal = 0.5 * rho * DOF * r_gas * t;
         let expected_e = kinetic + internal;
-        assert!((m_e - expected_e).abs() / expected_e < 1e-3, "E {m_e} vs {expected_e}");
+        assert!(
+            (m_e - expected_e).abs() / expected_e < 1e-3,
+            "E {m_e} vs {expected_e}"
+        );
     }
 }

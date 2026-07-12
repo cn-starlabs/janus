@@ -115,7 +115,11 @@ impl Particles3D {
         }
         let mass_batch: f64 = self.weight[start..end].iter().sum();
         let mean_u = if mass_batch > 0.0 {
-            [mom[0] / mass_batch, mom[1] / mass_batch, mom[2] / mass_batch]
+            [
+                mom[0] / mass_batch,
+                mom[1] / mass_batch,
+                mom[2] / mass_batch,
+            ]
         } else {
             [0.0, 0.0, 0.0]
         };
@@ -159,7 +163,13 @@ impl Particles3D {
     /// Stochastic BGK/Shakhov collision Bernoulli trial (per particle, its
     /// current cell's `tau`); identical construction to
     /// `Particles::mark_for_collision`.
-    pub fn mark_for_collision(&self, rng: &mut Rng, tau_of_cell: impl Fn(u32) -> f64, dt: f64, out_indices: &mut Vec<usize>) {
+    pub fn mark_for_collision(
+        &self,
+        rng: &mut Rng,
+        tau_of_cell: impl Fn(u32) -> f64,
+        dt: f64,
+        out_indices: &mut Vec<usize>,
+    ) {
         out_indices.clear();
         for i in 0..self.len() {
             let tau = tau_of_cell(self.cell[i]).max(1e-300);
@@ -215,7 +225,13 @@ impl Particles3D {
             let lx = grid.nx as f64 * grid.dx;
             let ly = grid.ny as f64 * grid.dy;
             let lz = grid.nz as f64 * grid.dz;
-            if p[0] < ox || p[0] >= ox + lx || p[1] < oy || p[1] >= oy + ly || p[2] < oz || p[2] >= oz + lz {
+            if p[0] < ox
+                || p[0] >= ox + lx
+                || p[1] < oy
+                || p[1] >= oy + ly
+                || p[2] < oz
+                || p[2] >= oz + lz
+            {
                 keep = on_boundary(&mut p, &mut v, rng);
             }
             if !keep {
@@ -227,9 +243,12 @@ impl Particles3D {
             }
             self.pos[i] = p;
             self.vel[i] = v;
-            let i_idx = (((p[0] - ox) / grid.dx).floor() as isize).clamp(0, grid.nx as isize - 1) as usize;
-            let j_idx = (((p[1] - oy) / grid.dy).floor() as isize).clamp(0, grid.ny as isize - 1) as usize;
-            let k_idx = (((p[2] - oz) / grid.dz).floor() as isize).clamp(0, grid.nz as isize - 1) as usize;
+            let i_idx =
+                (((p[0] - ox) / grid.dx).floor() as isize).clamp(0, grid.nx as isize - 1) as usize;
+            let j_idx =
+                (((p[1] - oy) / grid.dy).floor() as isize).clamp(0, grid.ny as isize - 1) as usize;
+            let k_idx =
+                (((p[2] - oz) / grid.dz).floor() as isize).clamp(0, grid.nz as isize - 1) as usize;
             self.cell[i] = grid.idx(i_idx, j_idx, k_idx) as u32;
             i += 1;
         }
@@ -248,7 +267,17 @@ mod tests {
         let u = [10.0, -3.0, 4.0];
         let t = 350.0;
         let r_gas = 208.13;
-        particles.sample_cell(&mut rng, 0, [0.5, 0.5, 0.5], [0.5, 0.5, 0.5], 1000, rho_vol, u, t, r_gas);
+        particles.sample_cell(
+            &mut rng,
+            0,
+            [0.5, 0.5, 0.5],
+            [0.5, 0.5, 0.5],
+            1000,
+            rho_vol,
+            u,
+            t,
+            r_gas,
+        );
 
         let (mass, px, py, pz, e) = particles.totals();
         assert!((mass - rho_vol).abs() < 1e-9, "mass {mass} vs {rho_vol}");
@@ -258,7 +287,10 @@ mod tests {
         let kinetic = 0.5 * rho_vol * (u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
         let internal = 0.5 * rho_vol * crate::maxwellian3d::DOF * r_gas * t;
         let expected_e = kinetic + internal;
-        assert!((e - expected_e).abs() / expected_e < 1e-6, "e {e} vs {expected_e}");
+        assert!(
+            (e - expected_e).abs() / expected_e < 1e-6,
+            "e {e} vs {expected_e}"
+        );
     }
 
     #[test]

@@ -17,11 +17,18 @@ use serde::{Deserialize, Serialize};
 pub enum BoundaryKind {
     /// Fully diffuse (Maxwell full accommodation) wall at a given
     /// temperature and tangential wall velocity (e.g. Couette plates).
-    DiffuseWall { temperature: f64, wall_velocity: [f64; 2] },
+    DiffuseWall {
+        temperature: f64,
+        wall_velocity: [f64; 2],
+    },
     /// Specular reflection wall (mirrors the normal velocity component).
     SpecularWall,
     /// Prescribed velocity + density/temperature inlet.
-    VelocityInlet { velocity: [f64; 2], density: f64, temperature: f64 },
+    VelocityInlet {
+        velocity: [f64; 2],
+        density: f64,
+        temperature: f64,
+    },
     /// Prescribed static pressure outlet/inlet.
     PressureInlet { pressure: f64, temperature: f64 },
     /// Zeroth-order extrapolation (Neumann) outlet.
@@ -72,7 +79,7 @@ impl BoundaryAssignment {
 }
 
 /// Monatomic ideal-gas properties + VHS viscosity law parameters.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GasProperties {
     /// Specific gas constant R = R_universal / molar_mass, J/(kg*K).
     pub r_gas: f64,
@@ -104,7 +111,7 @@ impl GasProperties {
 }
 
 /// Full case setup: grid + boundary assignment + gas properties.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CaseConfig {
     pub grid: Grid2D,
     pub bcs: BoundaryAssignment,
@@ -120,10 +127,20 @@ pub struct CaseConfig {
 /// (bc.rs, solver.rs, coupled.rs) matches on that shape directly.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum BoundaryKind3D {
-    DiffuseWall { temperature: f64, wall_velocity: [f64; 3] },
+    DiffuseWall {
+        temperature: f64,
+        wall_velocity: [f64; 3],
+    },
     SpecularWall,
-    VelocityInlet { velocity: [f64; 3], density: f64, temperature: f64 },
-    PressureInlet { pressure: f64, temperature: f64 },
+    VelocityInlet {
+        velocity: [f64; 3],
+        density: f64,
+        temperature: f64,
+    },
+    PressureInlet {
+        pressure: f64,
+        temperature: f64,
+    },
     Outlet,
     Symmetry,
     Periodic,

@@ -45,7 +45,10 @@ impl Complex {
     }
     #[inline]
     pub fn mul(self, o: Complex) -> Complex {
-        Complex::new(self.re * o.re - self.im * o.im, self.re * o.im + self.im * o.re)
+        Complex::new(
+            self.re * o.re - self.im * o.im,
+            self.re * o.im + self.im * o.re,
+        )
     }
     #[inline]
     pub fn scale(self, s: f64) -> Complex {
@@ -209,13 +212,25 @@ mod tests {
     #[test]
     fn fft_then_ifft_recovers_input() {
         let n = 16;
-        let mut data: Vec<Complex> = (0..n).map(|i| Complex::new((i as f64).sin(), (i as f64 * 0.3).cos())).collect();
+        let mut data: Vec<Complex> = (0..n)
+            .map(|i| Complex::new((i as f64).sin(), (i as f64 * 0.3).cos()))
+            .collect();
         let original = data.clone();
         fft_1d(&mut data, false);
         fft_1d(&mut data, true);
         for (a, b) in data.iter().zip(original.iter()) {
-            assert!((a.re - b.re).abs() < 1e-9, "re mismatch {} vs {}", a.re, b.re);
-            assert!((a.im - b.im).abs() < 1e-9, "im mismatch {} vs {}", a.im, b.im);
+            assert!(
+                (a.re - b.re).abs() < 1e-9,
+                "re mismatch {} vs {}",
+                a.re,
+                b.re
+            );
+            assert!(
+                (a.im - b.im).abs() < 1e-9,
+                "im mismatch {} vs {}",
+                a.im,
+                b.im
+            );
         }
     }
 
@@ -236,7 +251,9 @@ mod tests {
         // structured signal, to catch butterfly-indexing bugs the DC/
         // round-trip tests above might not expose.
         let n = 8;
-        let data: Vec<Complex> = (0..n).map(|i| Complex::new(i as f64, -(i as f64) * 0.5)).collect();
+        let data: Vec<Complex> = (0..n)
+            .map(|i| Complex::new(i as f64, -(i as f64) * 0.5))
+            .collect();
         let mut via_fft = data.clone();
         fft_1d(&mut via_fft, false);
 
@@ -260,7 +277,9 @@ mod tests {
     fn fft_3d_round_trip() {
         let (nx, ny, nz) = (4, 4, 4);
         let n = nx * ny * nz;
-        let mut data: Vec<Complex> = (0..n).map(|i| Complex::new((i as f64 * 0.7).sin(), 0.0)).collect();
+        let mut data: Vec<Complex> = (0..n)
+            .map(|i| Complex::new((i as f64 * 0.7).sin(), 0.0))
+            .collect();
         let original = data.clone();
         fft_3d(&mut data, nx, ny, nz, false);
         fft_3d(&mut data, nx, ny, nz, true);

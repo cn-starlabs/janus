@@ -43,3 +43,7 @@ fuzz/report.html
 fuzz/coverage/zero_copy/coverage.profdata
 fuzz/coverage/zero_copy/raw/default-zero_copy.profraw
 tatus
+blender-addon/__pycache__/
+blender-addon/core/__pycache__/*
+blender-addon/operators/__pycache__/*
+blender-addon/panels/__pycache__/*

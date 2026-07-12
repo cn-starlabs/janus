@@ -29,21 +29,34 @@ impl JvtkReader {
         let mmap = unsafe { Mmap::map(&file)? };
 
         if mmap.len() < 16 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "file too short for jvtk header"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "file too short for jvtk header",
+            ));
         }
         if mmap[0..8] != MAGIC {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "bad jvtk magic bytes"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "bad jvtk magic bytes",
+            ));
         }
         let header_len = u64::from_le_bytes(mmap[8..16].try_into().unwrap()) as usize;
         let header_start = 16;
         let header_end = header_start + header_len;
         if mmap.len() < header_end {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "file too short for declared header_len"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "file too short for declared header_len",
+            ));
         }
         // The header JSON may be shorter than header_len (padding); find the
         // JSON's actual extent by trimming trailing NUL padding bytes.
         let raw = &mmap[header_start..header_end];
-        let trimmed_len = raw.iter().rposition(|&b| b != 0).map(|p| p + 1).unwrap_or(0);
+        let trimmed_len = raw
+            .iter()
+            .rposition(|&b| b != 0)
+            .map(|p| p + 1)
+            .unwrap_or(0);
         let header = JvtkHeader::from_json_bytes(&raw[..trimmed_len])
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 

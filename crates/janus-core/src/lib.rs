@@ -19,8 +19,8 @@ pub mod units;
 pub mod vec2;
 
 pub use config::{
-    BoundaryAssignment, BoundaryAssignment3D, BoundaryKind, BoundaryKind3D, CaseConfig, CaseConfig3D, Face,
-    GasProperties,
+    BoundaryAssignment, BoundaryAssignment3D, BoundaryKind, BoundaryKind3D, CaseConfig,
+    CaseConfig3D, Face, GasProperties,
 };
 pub use distribution::{Distribution, Distribution3D};
 pub use fields::MacroFields;

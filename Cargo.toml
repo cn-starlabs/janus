@@ -6,6 +6,7 @@ members = [
     "crates/janus-kinetic",
     "crates/janus-cli",
     "crates/janus-sched",
+    "crates/janus-ffi",
 ]
 # NOTE: janus-viz / janus-ui are M3 scope and are intentionally NOT added as
 # workspace members yet (empty placeholder dirs may exist under crates/ for

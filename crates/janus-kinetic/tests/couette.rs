@@ -42,8 +42,14 @@ fn couette_linear_velocity_profile() {
     let bcs = BoundaryAssignment {
         west: BoundaryKind::Periodic,
         east: BoundaryKind::Periodic,
-        south: BoundaryKind::DiffuseWall { temperature: t_wall, wall_velocity: [0.0, 0.0] },
-        north: BoundaryKind::DiffuseWall { temperature: t_wall, wall_velocity: [u_wall, 0.0] },
+        south: BoundaryKind::DiffuseWall {
+            temperature: t_wall,
+            wall_velocity: [0.0, 0.0],
+        },
+        north: BoundaryKind::DiffuseWall {
+            temperature: t_wall,
+            wall_velocity: [u_wall, 0.0],
+        },
     };
     let config = CaseConfig { grid, bcs, gas };
 
@@ -64,7 +70,12 @@ fn couette_linear_velocity_profile() {
 
     let dt = solver.cfl_dt(0.3);
     // Diffusive timescale ~ H^2 / nu; run comfortably past it. nu = mu/rho.
-    let mu = janus_core::units::vhs_viscosity(t_wall, config.gas.mu_ref, config.gas.t_ref, config.gas.vhs_omega);
+    let mu = janus_core::units::vhs_viscosity(
+        t_wall,
+        config.gas.mu_ref,
+        config.gas.t_ref,
+        config.gas.vhs_omega,
+    );
     let nu = mu / rho0;
     let diffusion_time = height * height / nu;
     let n_steps = ((diffusion_time * 6.0) / dt).ceil() as u64;
@@ -95,5 +106,8 @@ fn couette_linear_velocity_profile() {
     // Loose tolerance: DVM/DUGKS on a coarse grid + finite run time + slip
     // effects at walls. 15% of wall speed is generous but meaningful.
     let tol = 0.15;
-    assert!(max_err < tol, "Couette profile max relative error {max_err} exceeds tolerance {tol}");
+    assert!(
+        max_err < tol,
+        "Couette profile max relative error {max_err} exceeds tolerance {tol}"
+    );
 }

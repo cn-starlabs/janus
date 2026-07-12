@@ -102,8 +102,16 @@ impl VelocityGrid2D {
     /// times the `t_ref`-Maxwellian, and a good (spectrally accurate for
     /// smooth `f`) approximation to `\int g(v) dv` in general — exactly the
     /// role `vw` plays for the DVM moment integrals throughout this crate.
-    pub fn gauss_hermite(r_gas: f64, t_ref: f64, u_ref: [f64; 2], n_per_axis: usize) -> (Vec<[f64; 2]>, Vec<f64>) {
-        assert!(n_per_axis >= 2, "gauss_hermite needs at least 2 nodes per axis");
+    pub fn gauss_hermite(
+        r_gas: f64,
+        t_ref: f64,
+        u_ref: [f64; 2],
+        n_per_axis: usize,
+    ) -> (Vec<[f64; 2]>, Vec<f64>) {
+        assert!(
+            n_per_axis >= 2,
+            "gauss_hermite needs at least 2 nodes per axis"
+        );
         // Both axes share the same 1D physical-space Gauss-Hermite rule (true
         // integration weights, Gaussian folded out — see `gauss_hermite_1d_axis`),
         // offset by the per-axis bulk velocity.
@@ -126,7 +134,10 @@ impl VelocityGrid2D {
     /// >= 3). See module docs: `gauss_hermite` is the preferred quadrature
     /// for new code; this remains for existing call sites.
     pub fn simpson(vmax: f64, n_per_axis: usize) -> (Vec<[f64; 2]>, Vec<f64>) {
-        assert!(n_per_axis >= 3 && n_per_axis % 2 == 1, "n_per_axis must be odd and >= 3");
+        assert!(
+            n_per_axis >= 3 && n_per_axis % 2 == 1,
+            "n_per_axis must be odd and >= 3"
+        );
         let h = 2.0 * vmax / (n_per_axis as f64 - 1.0);
         let nodes_1d: Vec<f64> = (0..n_per_axis).map(|i| -vmax + i as f64 * h).collect();
         let weights_1d: Vec<f64> = (0..n_per_axis)
@@ -259,7 +270,10 @@ fn tridiagonal_ql_implicit(d: &mut [f64], e: &mut [f64], z: &mut [f64], n: usize
                 break;
             }
             iter += 1;
-            assert!(iter < 100, "gauss_hermite: QL eigensolver failed to converge (n={n})");
+            assert!(
+                iter < 100,
+                "gauss_hermite: QL eigensolver failed to converge (n={n})"
+            );
 
             let mut g = (d[l + 1] - d[l]) / (2.0 * e[l]);
             let mut r = g.hypot(1.0);

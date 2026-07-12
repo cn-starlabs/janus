@@ -123,7 +123,14 @@ pub fn gh_equilibrium(rho: f64, u: [f64; 2], t: f64, r_gas: f64, v: [f64; 2]) ->
 /// `K=1` case `gh_equilibrium` calls is the specialization used by the rest
 /// of this crate's monatomic default path).
 #[inline]
-pub fn gh_equilibrium_with_k(rho: f64, u: [f64; 2], t: f64, r_gas: f64, v: [f64; 2], k_total: f64) -> (f64, f64) {
+pub fn gh_equilibrium_with_k(
+    rho: f64,
+    u: [f64; 2],
+    t: f64,
+    r_gas: f64,
+    v: [f64; 2],
+    k_total: f64,
+) -> (f64, f64) {
     let g = maxwellian_2d(rho, u, t, r_gas, v);
     // h_eq = k_total * R * T * g_eq, so that int h_eq dv = k_total * rho * R * T
     // (each reduced/internal DOF contributes R*T to the eta-variance:
@@ -196,7 +203,10 @@ mod tests {
         // Correct monatomic internal energy: 0.5 * DOF * rho * R * T with DOF=3.
         let internal = 0.5 * rho * DOF * r_gas * t;
         let expected_e = kinetic + internal;
-        assert!((m_e - expected_e).abs() / expected_e < 1e-2, "E {m_e} vs {expected_e}");
+        assert!(
+            (m_e - expected_e).abs() / expected_e < 1e-2,
+            "E {m_e} vs {expected_e}"
+        );
     }
 
     /// Polyatomic/internal-DOF end-to-end check (Part 2 of the hardening
@@ -241,6 +251,9 @@ mod tests {
         let kinetic = 0.5 * rho * (u[0] * u[0] + u[1] * u[1]);
         let internal = 0.5 * rho * dof_total * r_gas * t;
         let expected_e = kinetic + internal;
-        assert!((m_e - expected_e).abs() / expected_e < 1e-2, "E {m_e} vs {expected_e}");
+        assert!(
+            (m_e - expected_e).abs() / expected_e < 1e-2,
+            "E {m_e} vs {expected_e}"
+        );
     }
 }

@@ -77,8 +77,16 @@ impl UgkwpSolver3D {
         let rho = self.wave.fields.rho.clone();
         let mut mu = vec![0.0; grid.ncells()];
         for c in 0..grid.ncells() {
-            let t = self.wave.fields.temperature(c, r_gas, crate::maxwellian3d::DOF);
-            mu[c] = janus_core::units::vhs_viscosity(t, self.wave.mu_ref, self.wave.t_ref, self.wave.omega);
+            let t = self
+                .wave
+                .fields
+                .temperature(c, r_gas, crate::maxwellian3d::DOF);
+            mu[c] = janus_core::units::vhs_viscosity(
+                t,
+                self.wave.mu_ref,
+                self.wave.t_ref,
+                self.wave.omega,
+            );
         }
         let (nx, ny, nz) = (grid.nx, grid.ny, grid.nz);
         for k in 0..nz {
@@ -87,22 +95,46 @@ impl UgkwpSolver3D {
                     let c = grid.idx(i, j, k);
                     let rho_c = rho[c].max(f64::MIN_POSITIVE);
                     let (rho_w, rho_e) = if nx > 1 {
-                        let w = if i > 0 { rho[grid.idx(i - 1, j, k)] } else { rho[c] };
-                        let e = if i + 1 < nx { rho[grid.idx(i + 1, j, k)] } else { rho[c] };
+                        let w = if i > 0 {
+                            rho[grid.idx(i - 1, j, k)]
+                        } else {
+                            rho[c]
+                        };
+                        let e = if i + 1 < nx {
+                            rho[grid.idx(i + 1, j, k)]
+                        } else {
+                            rho[c]
+                        };
                         (w, e)
                     } else {
                         (rho_c, rho_c)
                     };
                     let (rho_s, rho_n) = if ny > 1 {
-                        let s = if j > 0 { rho[grid.idx(i, j - 1, k)] } else { rho[c] };
-                        let n = if j + 1 < ny { rho[grid.idx(i, j + 1, k)] } else { rho[c] };
+                        let s = if j > 0 {
+                            rho[grid.idx(i, j - 1, k)]
+                        } else {
+                            rho[c]
+                        };
+                        let n = if j + 1 < ny {
+                            rho[grid.idx(i, j + 1, k)]
+                        } else {
+                            rho[c]
+                        };
                         (s, n)
                     } else {
                         (rho_c, rho_c)
                     };
                     let (rho_d, rho_u) = if nz > 1 {
-                        let d = if k > 0 { rho[grid.idx(i, j, k - 1)] } else { rho[c] };
-                        let u = if k + 1 < nz { rho[grid.idx(i, j, k + 1)] } else { rho[c] };
+                        let d = if k > 0 {
+                            rho[grid.idx(i, j, k - 1)]
+                        } else {
+                            rho[c]
+                        };
+                        let u = if k + 1 < nz {
+                            rho[grid.idx(i, j, k + 1)]
+                        } else {
+                            rho[c]
+                        };
                         (d, u)
                     } else {
                         (rho_c, rho_c)
@@ -110,8 +142,12 @@ impl UgkwpSolver3D {
                     let drho_dx = (rho_e - rho_w) / (2.0 * grid.dx);
                     let drho_dy = (rho_n - rho_s) / (2.0 * grid.dy);
                     let drho_dz = (rho_u - rho_d) / (2.0 * grid.dz);
-                    let grad_mag = (drho_dx * drho_dx + drho_dy * drho_dy + drho_dz * drho_dz).sqrt();
-                    let t_c = self.wave.fields.temperature(c, r_gas, crate::maxwellian3d::DOF);
+                    let grad_mag =
+                        (drho_dx * drho_dx + drho_dy * drho_dy + drho_dz * drho_dz).sqrt();
+                    let t_c = self
+                        .wave
+                        .fields
+                        .temperature(c, r_gas, crate::maxwellian3d::DOF);
                     let lambda = janus_core::units::vhs_mean_free_path(mu[c], rho_c, r_gas, t_c);
                     self.wave.fields.kn_loc[c] = lambda * grad_mag / rho_c;
                 }
@@ -201,7 +237,10 @@ impl UgkwpSolver3D {
 
         for c in 0..ncells {
             let rho = self.wave.fields.rho[c];
-            let t = self.wave.fields.temperature(c, r_gas, crate::maxwellian3d::DOF);
+            let t = self
+                .wave
+                .fields
+                .temperature(c, r_gas, crate::maxwellian3d::DOF);
             self.p_free_scratch[c] = if rho > 0.0 {
                 let tau = self.wave.collision.relaxation_time(
                     rho,
@@ -211,7 +250,11 @@ impl UgkwpSolver3D {
                     self.wave.t_ref,
                     self.wave.omega,
                 );
-                if tau.is_finite() && tau > 0.0 { (-dt / tau).exp() } else { 0.0 }
+                if tau.is_finite() && tau > 0.0 {
+                    (-dt / tau).exp()
+                } else {
+                    0.0
+                }
             } else {
                 0.0
             };
@@ -235,7 +278,10 @@ impl UgkwpSolver3D {
                     }
                     let rho_vol_particle = rho_vol_total * p_free;
                     let u = self.wave.fields.velocity(c);
-                    let t = self.wave.fields.temperature(c, r_gas, crate::maxwellian3d::DOF);
+                    let t = self
+                        .wave
+                        .fields
+                        .temperature(c, r_gas, crate::maxwellian3d::DOF);
                     let center = grid.center(i, j, k);
                     let half_extent = [grid.dx * 0.5, grid.dy * 0.5, grid.dz * 0.5];
                     self.particles.sample_cell(
@@ -277,7 +323,12 @@ impl UgkwpSolver3D {
         }
         #[inline]
         fn is_absorbing(k: &BoundaryKind3D) -> bool {
-            matches!(k, BoundaryKind3D::VelocityInlet { .. } | BoundaryKind3D::PressureInlet { .. } | BoundaryKind3D::Outlet)
+            matches!(
+                k,
+                BoundaryKind3D::VelocityInlet { .. }
+                    | BoundaryKind3D::PressureInlet { .. }
+                    | BoundaryKind3D::Outlet
+            )
         }
 
         let west_periodic = is_periodic(&config_bcs.west);
@@ -301,8 +352,19 @@ impl UgkwpSolver3D {
                 if is_absorbing(&config_bcs.west) {
                     return false;
                 }
-                if let BoundaryKind3D::DiffuseWall { temperature, wall_velocity } = config_bcs.west {
-                    sample_wall_reemission(rng, [1.0, 0.0, 0.0], wall_velocity, temperature, r_gas, v);
+                if let BoundaryKind3D::DiffuseWall {
+                    temperature,
+                    wall_velocity,
+                } = config_bcs.west
+                {
+                    sample_wall_reemission(
+                        rng,
+                        [1.0, 0.0, 0.0],
+                        wall_velocity,
+                        temperature,
+                        r_gas,
+                        v,
+                    );
                 } else {
                     v[0] = -v[0];
                 }
@@ -311,8 +373,19 @@ impl UgkwpSolver3D {
                 if is_absorbing(&config_bcs.east) {
                     return false;
                 }
-                if let BoundaryKind3D::DiffuseWall { temperature, wall_velocity } = config_bcs.east {
-                    sample_wall_reemission(rng, [-1.0, 0.0, 0.0], wall_velocity, temperature, r_gas, v);
+                if let BoundaryKind3D::DiffuseWall {
+                    temperature,
+                    wall_velocity,
+                } = config_bcs.east
+                {
+                    sample_wall_reemission(
+                        rng,
+                        [-1.0, 0.0, 0.0],
+                        wall_velocity,
+                        temperature,
+                        r_gas,
+                        v,
+                    );
                 } else {
                     v[0] = -v[0];
                 }
@@ -330,8 +403,19 @@ impl UgkwpSolver3D {
                 if is_absorbing(&config_bcs.south) {
                     return false;
                 }
-                if let BoundaryKind3D::DiffuseWall { temperature, wall_velocity } = config_bcs.south {
-                    sample_wall_reemission(rng, [0.0, 1.0, 0.0], wall_velocity, temperature, r_gas, v);
+                if let BoundaryKind3D::DiffuseWall {
+                    temperature,
+                    wall_velocity,
+                } = config_bcs.south
+                {
+                    sample_wall_reemission(
+                        rng,
+                        [0.0, 1.0, 0.0],
+                        wall_velocity,
+                        temperature,
+                        r_gas,
+                        v,
+                    );
                 } else {
                     v[1] = -v[1];
                 }
@@ -340,8 +424,19 @@ impl UgkwpSolver3D {
                 if is_absorbing(&config_bcs.north) {
                     return false;
                 }
-                if let BoundaryKind3D::DiffuseWall { temperature, wall_velocity } = config_bcs.north {
-                    sample_wall_reemission(rng, [0.0, -1.0, 0.0], wall_velocity, temperature, r_gas, v);
+                if let BoundaryKind3D::DiffuseWall {
+                    temperature,
+                    wall_velocity,
+                } = config_bcs.north
+                {
+                    sample_wall_reemission(
+                        rng,
+                        [0.0, -1.0, 0.0],
+                        wall_velocity,
+                        temperature,
+                        r_gas,
+                        v,
+                    );
                 } else {
                     v[1] = -v[1];
                 }
@@ -359,8 +454,19 @@ impl UgkwpSolver3D {
                 if is_absorbing(&config_bcs.down) {
                     return false;
                 }
-                if let BoundaryKind3D::DiffuseWall { temperature, wall_velocity } = config_bcs.down {
-                    sample_wall_reemission(rng, [0.0, 0.0, 1.0], wall_velocity, temperature, r_gas, v);
+                if let BoundaryKind3D::DiffuseWall {
+                    temperature,
+                    wall_velocity,
+                } = config_bcs.down
+                {
+                    sample_wall_reemission(
+                        rng,
+                        [0.0, 0.0, 1.0],
+                        wall_velocity,
+                        temperature,
+                        r_gas,
+                        v,
+                    );
                 } else {
                     v[2] = -v[2];
                 }
@@ -369,8 +475,19 @@ impl UgkwpSolver3D {
                 if is_absorbing(&config_bcs.up) {
                     return false;
                 }
-                if let BoundaryKind3D::DiffuseWall { temperature, wall_velocity } = config_bcs.up {
-                    sample_wall_reemission(rng, [0.0, 0.0, -1.0], wall_velocity, temperature, r_gas, v);
+                if let BoundaryKind3D::DiffuseWall {
+                    temperature,
+                    wall_velocity,
+                } = config_bcs.up
+                {
+                    sample_wall_reemission(
+                        rng,
+                        [0.0, 0.0, -1.0],
+                        wall_velocity,
+                        temperature,
+                        r_gas,
+                        v,
+                    );
                 } else {
                     v[2] = -v[2];
                 }
@@ -382,9 +499,19 @@ impl UgkwpSolver3D {
 
         for c in 0..ncells {
             let rho = self.wave.fields.rho[c];
-            let t = self.wave.fields.temperature(c, r_gas, crate::maxwellian3d::DOF);
+            let t = self
+                .wave
+                .fields
+                .temperature(c, r_gas, crate::maxwellian3d::DOF);
             self.tau_scratch[c] = if rho > 0.0 {
-                self.wave.collision.relaxation_time(rho, t, r_gas, self.wave.mu_ref, self.wave.t_ref, self.wave.omega)
+                self.wave.collision.relaxation_time(
+                    rho,
+                    t,
+                    r_gas,
+                    self.wave.mu_ref,
+                    self.wave.t_ref,
+                    self.wave.omega,
+                )
             } else {
                 f64::INFINITY
             };
@@ -621,7 +748,11 @@ fn set_conservative_equilibrium_3d(
         let cz = v[2] - u[2];
         let c2 = cx * cx + cy * cy + cz * cz;
         f[k] += f[k]
-            * (coef[0] + coef[1] * cx * inv_sig + coef[2] * cy * inv_sig + coef[3] * cz * inv_sig + coef[4] * c2 * inv_sig2);
+            * (coef[0]
+                + coef[1] * cx * inv_sig
+                + coef[2] * cy * inv_sig
+                + coef[3] * cz * inv_sig
+                + coef[4] * c2 * inv_sig2);
     }
 }
 
@@ -656,7 +787,12 @@ mod tests {
     #[test]
     fn default_kernel_is_full_ugkwp_3d() {
         let config = periodic_case(2, 2, 2, 0.02);
-        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(287.0, 1500.0, [0.0, 0.0, 0.0], 5);
+        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(
+            287.0,
+            1500.0,
+            [0.0, 0.0, 0.0],
+            5,
+        );
         let dist = Distribution3D::zeros(config.grid.ncells(), vgrid, vw);
         let solver = UgkwpSolver3D::new(&config, dist, 1);
         assert_eq!(solver.kernel, FluxKernel3D::Ugkwp);
@@ -693,7 +829,8 @@ mod tests {
         };
         let u_flow = [15.0, -8.0, 4.0];
         // Grid placed at the flow, refined, so the GH quadrature resolves it.
-        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(287.0, 400.0, u_flow, 8);
+        let (vgrid, vw) =
+            crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(287.0, 400.0, u_flow, 8);
         let dist = Distribution3D::zeros(config.grid.ncells(), vgrid, vw);
         let mut solver = UgkwpSolver3D::new(&config, dist, 42);
         solver.kn_threshold = -1.0; // never gate out a cell -> particle path forced everywhere
@@ -712,7 +849,11 @@ mod tests {
             solver.step(dt, &config.bcs);
             let now = solver.totals();
             assert!(
-                now.0.is_finite() && now.1.is_finite() && now.2.is_finite() && now.3.is_finite() && now.4.is_finite(),
+                now.0.is_finite()
+                    && now.1.is_finite()
+                    && now.2.is_finite()
+                    && now.3.is_finite()
+                    && now.4.is_finite(),
                 "non-finite at step {step}"
             );
         }

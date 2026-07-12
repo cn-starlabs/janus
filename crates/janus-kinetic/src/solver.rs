@@ -180,11 +180,11 @@ pub struct DugksSolver {
     /// `new()`; set directly to opt into `TimeScheme::Rk2`.
     pub scheme: TimeScheme,
     // Scratch buffers reused every step (no per-step allocation):
-    tau_scratch: Vec<f64>,  // len = ncells, relaxation time at pre-step state
-    face_flux_g: Vec<f64>,  // len = nv, reused per face
-    face_flux_h: Vec<f64>,  // len = nv, reused per face
-    ghost_buf_g: Vec<f64>,  // len = nv, reused per boundary face
-    ghost_buf_h: Vec<f64>,  // len = nv, reused per boundary face
+    tau_scratch: Vec<f64>, // len = ncells, relaxation time at pre-step state
+    face_flux_g: Vec<f64>, // len = nv, reused per face
+    face_flux_h: Vec<f64>, // len = nv, reused per face
+    ghost_buf_g: Vec<f64>, // len = nv, reused per boundary face
+    ghost_buf_h: Vec<f64>, // len = nv, reused per boundary face
     // RK2-only scratch (preallocated once here so `step_scheme(Rk2)` performs
     // zero heap allocation in the hot path, same discipline as the rest of
     // this struct's scratch buffers): holds the stage-1 (`u1 = u^n +
@@ -394,12 +394,30 @@ impl DugksSolver {
             };
 
             let up: UpwindState = if vn >= 0.0 {
-                UpwindState { g: g_in_face, h: h_in_face, rho: rho_in, u: u_in, t: t_in, q: q_in, tau: tau_in }
+                UpwindState {
+                    g: g_in_face,
+                    h: h_in_face,
+                    rho: rho_in,
+                    u: u_in,
+                    t: t_in,
+                    q: q_in,
+                    tau: tau_in,
+                }
             } else {
-                UpwindState { g: g_out_face, h: h_out_face, rho: rho_out, u: u_out, t: t_out, q: q_out, tau: tau_out }
+                UpwindState {
+                    g: g_out_face,
+                    h: h_out_face,
+                    rho: rho_out,
+                    u: u_out,
+                    t: t_out,
+                    q: q_out,
+                    tau: tau_out,
+                }
             };
 
-            let (geq, heq) = self.collision.equilibrium(up.rho, up.u, up.t, self.gas_r, up.q, v);
+            let (geq, heq) = self
+                .collision
+                .equilibrium(up.rho, up.u, up.t, self.gas_r, up.q, v);
             let g_face = (up.tau * up.g + dt_half * geq) / (up.tau + dt_half);
             let h_face = (up.tau * up.h + dt_half * heq) / (up.tau + dt_half);
             self.face_flux_g[k] = g_face * vn;
@@ -435,7 +453,16 @@ impl DugksSolver {
         let h_interior: Vec<f64> = self.dist.h[cin * nv..cin * nv + nv].to_vec();
         let vgrid = self.dist.vgrid.clone();
         let vw = self.dist.vw.clone();
-        bc_kernel.apply_gh(&g_interior, &h_interior, &vgrid, &vw, normal, self.gas_r, &mut self.ghost_buf_g, &mut self.ghost_buf_h);
+        bc_kernel.apply_gh(
+            &g_interior,
+            &h_interior,
+            &vgrid,
+            &vw,
+            normal,
+            self.gas_r,
+            &mut self.ghost_buf_g,
+            &mut self.ghost_buf_h,
+        );
 
         let dt_half = 0.5 * dt;
         for k in 0..nv {
@@ -454,7 +481,9 @@ impl DugksSolver {
             let (rho_up, u_up, t_up, q_up) = (rho_in, u_in, t_in, q_in);
             let tau_up = tau_in;
 
-            let (geq, heq) = self.collision.equilibrium(rho_up, u_up, t_up, self.gas_r, q_up, v);
+            let (geq, heq) = self
+                .collision
+                .equilibrium(rho_up, u_up, t_up, self.gas_r, q_up, v);
             let g_face = (tau_up * g_up + dt_half * geq) / (tau_up + dt_half);
             let h_face = (tau_up * h_up + dt_half * heq) / (tau_up + dt_half);
             self.face_flux_g[k] = g_face * vn;
@@ -542,8 +571,14 @@ impl DugksSolver {
         for c in 0..ncells {
             let rho = self.fields.rho[c];
             let t = self.fields.temperature(c, self.gas_r, DOF);
-            self.tau_scratch[c] =
-                self.collision.relaxation_time(rho, t, self.gas_r, self.mu_ref, self.t_ref, self.omega);
+            self.tau_scratch[c] = self.collision.relaxation_time(
+                rho,
+                t,
+                self.gas_r,
+                self.mu_ref,
+                self.t_ref,
+                self.omega,
+            );
         }
 
         for j in 0..ny {
@@ -591,8 +626,19 @@ impl DugksSolver {
                             } else {
                                 Some(self.grid.idx(nx - 1, j))
                             };
-                            let far_out = if nx > 1 { Some(self.grid.idx(1, j)) } else { None };
-                            self.compute_interior_face_flux(cin, cout, far_in, far_out, [1.0, 0.0], dt);
+                            let far_out = if nx > 1 {
+                                Some(self.grid.idx(1, j))
+                            } else {
+                                None
+                            };
+                            self.compute_interior_face_flux(
+                                cin,
+                                cout,
+                                far_in,
+                                far_out,
+                                [1.0, 0.0],
+                                dt,
+                            );
                             for k in 0..nv {
                                 let fg = self.face_flux_g[k] * self.grid.dy * dt / vol;
                                 let fh = self.face_flux_h[k] * self.grid.dy * dt / vol;
@@ -603,7 +649,13 @@ impl DugksSolver {
                             }
                         }
                         BoundaryKindResolved::Other => {
-                            self.compute_boundary_face_flux(cin, [1.0, 0.0], Edge::East, config_bcs, dt);
+                            self.compute_boundary_face_flux(
+                                cin,
+                                [1.0, 0.0],
+                                Edge::East,
+                                config_bcs,
+                                dt,
+                            );
                             for k in 0..nv {
                                 let fg = self.face_flux_g[k] * self.grid.dy * dt / vol;
                                 let fh = self.face_flux_h[k] * self.grid.dy * dt / vol;
@@ -649,8 +701,19 @@ impl DugksSolver {
                             } else {
                                 Some(self.grid.idx(i, ny - 1))
                             };
-                            let far_out = if ny > 1 { Some(self.grid.idx(i, 1)) } else { None };
-                            self.compute_interior_face_flux(cin, cout, far_in, far_out, [0.0, 1.0], dt);
+                            let far_out = if ny > 1 {
+                                Some(self.grid.idx(i, 1))
+                            } else {
+                                None
+                            };
+                            self.compute_interior_face_flux(
+                                cin,
+                                cout,
+                                far_in,
+                                far_out,
+                                [0.0, 1.0],
+                                dt,
+                            );
                             for k in 0..nv {
                                 let fg = self.face_flux_g[k] * self.grid.dx * dt / vol;
                                 let fh = self.face_flux_h[k] * self.grid.dx * dt / vol;
@@ -661,7 +724,13 @@ impl DugksSolver {
                             }
                         }
                         BoundaryKindResolved::Other => {
-                            self.compute_boundary_face_flux(cin, [0.0, 1.0], Edge::North, config_bcs, dt);
+                            self.compute_boundary_face_flux(
+                                cin,
+                                [0.0, 1.0],
+                                Edge::North,
+                                config_bcs,
+                                dt,
+                            );
                             for k in 0..nv {
                                 let fg = self.face_flux_g[k] * self.grid.dx * dt / vol;
                                 let fh = self.face_flux_h[k] * self.grid.dx * dt / vol;
@@ -674,7 +743,13 @@ impl DugksSolver {
 
                 if i == 0 {
                     if let BoundaryKindResolved::Other = self.bcs[0] {
-                        self.compute_boundary_face_flux(cin, [-1.0, 0.0], Edge::West, config_bcs, dt);
+                        self.compute_boundary_face_flux(
+                            cin,
+                            [-1.0, 0.0],
+                            Edge::West,
+                            config_bcs,
+                            dt,
+                        );
                         for k in 0..nv {
                             let fg = self.face_flux_g[k] * self.grid.dy * dt / vol;
                             let fh = self.face_flux_h[k] * self.grid.dy * dt / vol;
@@ -685,7 +760,13 @@ impl DugksSolver {
                 }
                 if j == 0 {
                     if let BoundaryKindResolved::Other = self.bcs[2] {
-                        self.compute_boundary_face_flux(cin, [0.0, -1.0], Edge::South, config_bcs, dt);
+                        self.compute_boundary_face_flux(
+                            cin,
+                            [0.0, -1.0],
+                            Edge::South,
+                            config_bcs,
+                            dt,
+                        );
                         for k in 0..nv {
                             let fg = self.face_flux_g[k] * self.grid.dx * dt / vol;
                             let fh = self.face_flux_h[k] * self.grid.dx * dt / vol;
@@ -736,9 +817,20 @@ impl DugksSolver {
             // Conservation targets: the relaxation (a local collision step) must
             // leave this cell's mass/momentum/energy EXACTLY unchanged. These
             // are the post-transport moments just recomputed above.
-            let (tgt_rho, tgt_px, tgt_py, tgt_e) =
-                (rho, self.fields.mom[0][c], self.fields.mom[1][c], self.fields.energy[c]);
-            let tau_c = self.collision.relaxation_time(rho, t, self.gas_r, self.mu_ref, self.t_ref, self.omega);
+            let (tgt_rho, tgt_px, tgt_py, tgt_e) = (
+                rho,
+                self.fields.mom[0][c],
+                self.fields.mom[1][c],
+                self.fields.energy[c],
+            );
+            let tau_c = self.collision.relaxation_time(
+                rho,
+                t,
+                self.gas_r,
+                self.mu_ref,
+                self.t_ref,
+                self.omega,
+            );
 
             // Pass 1: relax each node in place, cache the discrete equilibrium,
             // and accumulate (a) the post-relaxation moments of g1 and (b) the
@@ -789,12 +881,16 @@ impl DugksSolver {
             let d_rho = tgt_rho - rho1;
             let d_px = tgt_px - px1;
             let d_py = tgt_py - py1;
-            let det = s1 * (sxx * syy - sxy * sxy) - sx * (sx * syy - sxy * sy) + sy * (sx * sxy - sxx * sy);
+            let det = s1 * (sxx * syy - sxy * sxy) - sx * (sx * syy - sxy * sy)
+                + sy * (sx * sxy - sxx * sy);
             let (a, b, cc) = if det.abs() > 1e-300 {
                 let inv = 1.0 / det;
-                let det_a = d_rho * (sxx * syy - sxy * sxy) - sx * (d_px * syy - sxy * d_py) + sy * (d_px * sxy - sxx * d_py);
-                let det_b = s1 * (d_px * syy - sxy * d_py) - d_rho * (sx * syy - sxy * sy) + sy * (sx * d_py - d_px * sy);
-                let det_c = s1 * (sxx * d_py - d_px * sxy) - sx * (sx * d_py - d_px * sy) + d_rho * (sx * sxy - sxx * sy);
+                let det_a = d_rho * (sxx * syy - sxy * sxy) - sx * (d_px * syy - sxy * d_py)
+                    + sy * (d_px * sxy - sxx * d_py);
+                let det_b = s1 * (d_px * syy - sxy * d_py) - d_rho * (sx * syy - sxy * sy)
+                    + sy * (sx * d_py - d_px * sy);
+                let det_c = s1 * (sxx * d_py - d_px * sxy) - sx * (sx * d_py - d_px * sy)
+                    + d_rho * (sx * sxy - sxx * sy);
                 (det_a * inv, det_b * inv, det_c * inv)
             } else {
                 (0.0, 0.0, 0.0)
@@ -805,7 +901,11 @@ impl DugksSolver {
             //   h1_k += heq_k*F,  0.5*F*sum(vw*heq) = remaining energy defect.
             let e_from_g_corr = 0.5 * (a * sqq + b * sxqq + cc * syqq);
             let d_e = tgt_e - e1 - e_from_g_corr;
-            let f_h = if sh.abs() > 1e-300 { d_e / (0.5 * sh) } else { 0.0 };
+            let f_h = if sh.abs() > 1e-300 {
+                d_e / (0.5 * sh)
+            } else {
+                0.0
+            };
 
             // Pass 2: apply the correction. This makes the cell's discrete
             // (mass, momentum, energy) moments equal the targets to machine
@@ -892,7 +992,11 @@ pub(crate) fn van_leer_face_value(far: f64, near: f64, down: f64) -> f64 {
         return near;
     }
     let r = d_downwind / d_upwind;
-    let phi = if r > 0.0 { (r + r.abs()) / (1.0 + r.abs()) } else { 0.0 };
+    let phi = if r > 0.0 {
+        (r + r.abs()) / (1.0 + r.abs())
+    } else {
+        0.0
+    };
     // The reconstructed face value of g/h is a velocity-space density and must
     // stay non-negative; a large slope across a strong (e.g. 1000:1) jump can
     // otherwise extrapolate below zero and over-deplete the downwind cell,
@@ -1033,8 +1137,14 @@ mod tests {
             solver.step(dt, &config.bcs);
         }
 
-        assert!(solver.dist.f.iter().all(|v| v.is_finite()), "g has non-finite values");
-        assert!(solver.dist.h.iter().all(|v| v.is_finite()), "h has non-finite values");
+        assert!(
+            solver.dist.f.iter().all(|v| v.is_finite()),
+            "g has non-finite values"
+        );
+        assert!(
+            solver.dist.h.iter().all(|v| v.is_finite()),
+            "h has non-finite values"
+        );
         assert!(solver.fields.rho.iter().all(|v| v.is_finite()));
         assert!(solver.fields.mom[0].iter().all(|v| v.is_finite()));
         assert!(solver.fields.mom[1].iter().all(|v| v.is_finite()));
@@ -1050,7 +1160,10 @@ mod tests {
         let mut dist = vec![1.0, 2.0, 3.0, 4.0, 0.5, 0.0, 2.5, 1.0];
         let before = dist.clone();
         apply_positivity_floor(&mut dist, nv, ncells);
-        assert_eq!(dist, before, "positivity floor must be a no-op when nothing is negative");
+        assert_eq!(
+            dist, before,
+            "positivity floor must be a no-op when nothing is negative"
+        );
     }
 
     #[test]
@@ -1060,9 +1173,15 @@ mod tests {
         let mut dist = vec![5.0, -1.0, 3.0, 2.0];
         let pre_sum: f64 = dist.iter().sum();
         apply_positivity_floor(&mut dist, nv, ncells);
-        assert!(dist.iter().all(|&v| v >= 0.0), "all nodes must be non-negative after flooring: {dist:?}");
+        assert!(
+            dist.iter().all(|&v| v >= 0.0),
+            "all nodes must be non-negative after flooring: {dist:?}"
+        );
         let post_sum: f64 = dist.iter().sum();
-        assert!((post_sum - pre_sum).abs() / pre_sum.abs() < 1e-12, "cell total must be conserved: {pre_sum} vs {post_sum}");
+        assert!(
+            (post_sum - pre_sum).abs() / pre_sum.abs() < 1e-12,
+            "cell total must be conserved: {pre_sum} vs {post_sum}"
+        );
     }
 
     #[test]
@@ -1133,8 +1252,14 @@ mod tests {
         let after = solver.totals();
 
         let tol = 1e-3;
-        assert!((after.0 - before.0).abs() / before.0.abs().max(1e-30) < tol, "mass drift");
-        assert!((after.3 - before.3).abs() / before.3.abs().max(1e-30) < tol, "energy drift");
+        assert!(
+            (after.0 - before.0).abs() / before.0.abs().max(1e-30) < tol,
+            "mass drift"
+        );
+        assert!(
+            (after.3 - before.3).abs() / before.3.abs().max(1e-30) < tol,
+            "energy drift"
+        );
         assert!(solver.dist.f.iter().all(|v| v.is_finite()));
         assert!(solver.dist.h.iter().all(|v| v.is_finite()));
     }
@@ -1163,8 +1288,14 @@ mod tests {
         let after = solver.totals();
 
         let tol = 1e-3;
-        assert!((after.0 - before.0).abs() / before.0.abs().max(1e-30) < tol, "mass drift: {before:?} vs {after:?}");
-        assert!((after.3 - before.3).abs() / before.3.abs().max(1e-30) < tol, "energy drift");
+        assert!(
+            (after.0 - before.0).abs() / before.0.abs().max(1e-30) < tol,
+            "mass drift: {before:?} vs {after:?}"
+        );
+        assert!(
+            (after.3 - before.3).abs() / before.3.abs().max(1e-30) < tol,
+            "energy drift"
+        );
         assert!(solver.dist.f.iter().all(|v| v.is_finite()));
         assert!(solver.dist.h.iter().all(|v| v.is_finite()));
     }

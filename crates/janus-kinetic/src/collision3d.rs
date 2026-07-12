@@ -25,11 +25,27 @@ use crate::maxwellian3d::{maxwellian_3d, DOF};
 pub trait Collision3D {
     /// Equilibrium (post-collision target) `f_eq` at discrete velocity `v`
     /// for the given macro state and heat flux `q = (qx, qy, qz)`.
-    fn equilibrium(&self, rho: f64, u: [f64; 3], t: f64, r_gas: f64, q: [f64; 3], v: [f64; 3]) -> f64;
+    fn equilibrium(
+        &self,
+        rho: f64,
+        u: [f64; 3],
+        t: f64,
+        r_gas: f64,
+        q: [f64; 3],
+        v: [f64; 3],
+    ) -> f64;
 
     /// Relaxation time `tau = mu / p` (VHS viscosity law), shared with the
     /// 2D solver's identical construction.
-    fn relaxation_time(&self, rho: f64, t: f64, r_gas: f64, mu_ref: f64, t_ref: f64, omega: f64) -> f64 {
+    fn relaxation_time(
+        &self,
+        rho: f64,
+        t: f64,
+        r_gas: f64,
+        mu_ref: f64,
+        t_ref: f64,
+        omega: f64,
+    ) -> f64 {
         let mu = mu_ref * (t / t_ref).powf(omega);
         let p = rho * r_gas * t;
         mu / p.max(f64::MIN_POSITIVE)
@@ -50,7 +66,15 @@ impl Shakhov3D {
 }
 
 impl Collision3D for Shakhov3D {
-    fn equilibrium(&self, rho: f64, u: [f64; 3], t: f64, r_gas: f64, q: [f64; 3], v: [f64; 3]) -> f64 {
+    fn equilibrium(
+        &self,
+        rho: f64,
+        u: [f64; 3],
+        t: f64,
+        r_gas: f64,
+        q: [f64; 3],
+        v: [f64; 3],
+    ) -> f64 {
         let f_m = maxwellian_3d(rho, u, t, r_gas, v);
         let rt = r_gas * t;
         let cx = v[0] - u[0];

@@ -22,7 +22,11 @@ use janus_kinetic::solver::DugksSolver;
 use janus_kinetic::velocity_grid::VelocityGrid2D;
 
 fn periodic_case(nx: usize, ny: usize, dx: f64, dy: f64, gas: GasProperties) -> CaseConfig {
-    CaseConfig { grid: Grid2D::new(nx, ny, dx, dy, [0.0, 0.0]), bcs: BoundaryAssignment::all_periodic(), gas }
+    CaseConfig {
+        grid: Grid2D::new(nx, ny, dx, dy, [0.0, 0.0]),
+        bcs: BoundaryAssignment::all_periodic(),
+        gas,
+    }
 }
 
 fn init_uniform(solver: &mut DugksSolver, rho: f64, u: [f64; 2], t: f64) {
@@ -82,7 +86,11 @@ fn strong_shock_stays_positive_and_finite() {
     for j in 0..ny {
         for i in 0..nx {
             let c = solver.grid.idx(i, j);
-            let (rho, t) = if i < nx / 2 { (rho_l, t_l) } else { (rho_r, t_r) };
+            let (rho, t) = if i < nx / 2 {
+                (rho_l, t_l)
+            } else {
+                (rho_r, t_r)
+            };
             for k in 0..nv {
                 let (g, h) = gh_equilibrium(rho, [0.0, 0.0], t, r_gas, vgrid[k]);
                 solver.dist.f[c * nv + k] = g;
@@ -95,12 +103,28 @@ fn strong_shock_stays_positive_and_finite() {
     let dt = solver.cfl_dt(0.2);
     for step in 0..200 {
         solver.step(dt, &config.bcs);
-        assert!(solver.dist.f.iter().all(|v| v.is_finite()), "g non-finite at step {step}");
-        assert!(solver.dist.h.iter().all(|v| v.is_finite()), "h non-finite at step {step}");
-        assert!(solver.dist.f.iter().all(|&v| v >= -1e-9), "g went meaningfully negative at step {step}");
+        assert!(
+            solver.dist.f.iter().all(|v| v.is_finite()),
+            "g non-finite at step {step}"
+        );
+        assert!(
+            solver.dist.h.iter().all(|v| v.is_finite()),
+            "h non-finite at step {step}"
+        );
+        assert!(
+            solver.dist.f.iter().all(|&v| v >= -1e-9),
+            "g went meaningfully negative at step {step}"
+        );
         for c in 0..solver.grid.ncells() {
-            assert!(solver.fields.rho[c].is_finite() && solver.fields.rho[c] >= 0.0, "rho[{c}] invalid at step {step}: {}", solver.fields.rho[c]);
-            assert!(solver.fields.energy[c].is_finite() && solver.fields.energy[c] >= 0.0, "energy[{c}] invalid at step {step}");
+            assert!(
+                solver.fields.rho[c].is_finite() && solver.fields.rho[c] >= 0.0,
+                "rho[{c}] invalid at step {step}: {}",
+                solver.fields.rho[c]
+            );
+            assert!(
+                solver.fields.energy[c].is_finite() && solver.fields.energy[c] >= 0.0,
+                "energy[{c}] invalid at step {step}"
+            );
         }
     }
 }
@@ -130,15 +154,27 @@ fn near_vacuum_cell_does_not_blow_up() {
         solver.dist.h[c0 * nv + k] *= 1e-12;
     }
     solver.update_moments();
-    assert!(solver.fields.rho[c0] < 1e-9, "sanity: hole cell should be near-vacuum");
+    assert!(
+        solver.fields.rho[c0] < 1e-9,
+        "sanity: hole cell should be near-vacuum"
+    );
 
     let dt = solver.cfl_dt(0.2);
     for step in 0..100 {
         solver.step(dt, &config.bcs);
         for c in 0..solver.grid.ncells() {
-            assert!(solver.fields.rho[c].is_finite(), "rho[{c}] non-finite at step {step} (near-vacuum blowup)");
-            assert!(solver.fields.rho[c] >= 0.0, "rho[{c}] negative at step {step}");
-            assert!(solver.fields.energy[c].is_finite() && solver.fields.energy[c] >= 0.0, "energy[{c}] invalid at step {step}");
+            assert!(
+                solver.fields.rho[c].is_finite(),
+                "rho[{c}] non-finite at step {step} (near-vacuum blowup)"
+            );
+            assert!(
+                solver.fields.rho[c] >= 0.0,
+                "rho[{c}] negative at step {step}"
+            );
+            assert!(
+                solver.fields.energy[c].is_finite() && solver.fields.energy[c] >= 0.0,
+                "energy[{c}] invalid at step {step}"
+            );
         }
     }
 }
@@ -168,8 +204,18 @@ fn extreme_continuum_kn_conserves_to_near_machine_precision() {
     }
     let after = solver.totals();
     let tol = 1e-8;
-    assert!((after.0 - before.0).abs() / before.0.abs() < tol, "mass drift at Kn<<1: {:?} -> {:?}", before, after);
-    assert!((after.3 - before.3).abs() / before.3.abs() < tol, "energy drift at Kn<<1: {:?} -> {:?}", before, after);
+    assert!(
+        (after.0 - before.0).abs() / before.0.abs() < tol,
+        "mass drift at Kn<<1: {:?} -> {:?}",
+        before,
+        after
+    );
+    assert!(
+        (after.3 - before.3).abs() / before.3.abs() < tol,
+        "energy drift at Kn<<1: {:?} -> {:?}",
+        before,
+        after
+    );
 }
 
 /// 3b. Extreme Kn=100 (free-molecular-like) conservation: force the particle
@@ -205,12 +251,25 @@ fn extreme_free_molecular_kn_conserves_over_many_steps() {
     for step in 0..40 {
         solver.step(dt, &config.bcs);
         let now = solver.totals();
-        assert!(now.0.is_finite() && now.3.is_finite(), "non-finite at step {step} in free-molecular regime");
+        assert!(
+            now.0.is_finite() && now.3.is_finite(),
+            "non-finite at step {step} in free-molecular regime"
+        );
     }
     let after = solver.totals();
     let tol = 1e-6;
-    assert!((after.0 - before.0).abs() / before.0.abs() < tol, "mass drift at Kn>>1: {:?} -> {:?}", before, after);
-    assert!((after.3 - before.3).abs() / before.3.abs() < tol, "energy drift at Kn>>1: {:?} -> {:?}", before, after);
+    assert!(
+        (after.0 - before.0).abs() / before.0.abs() < tol,
+        "mass drift at Kn>>1: {:?} -> {:?}",
+        before,
+        after
+    );
+    assert!(
+        (after.3 - before.3).abs() / before.3.abs() < tol,
+        "energy drift at Kn>>1: {:?} -> {:?}",
+        before,
+        after
+    );
 }
 
 fn init_uniform_ugkwp(solver: &mut UgkwpSolver, rho: f64, u: [f64; 2], t: f64) {
@@ -256,8 +315,14 @@ fn wall_bounded_rarefied_flow_shows_temperature_jump() {
     let bcs = BoundaryAssignment {
         west: BoundaryKind::Periodic,
         east: BoundaryKind::Periodic,
-        south: BoundaryKind::DiffuseWall { temperature: t_cold, wall_velocity: [0.0, 0.0] },
-        north: BoundaryKind::DiffuseWall { temperature: t_hot, wall_velocity: [0.0, 0.0] },
+        south: BoundaryKind::DiffuseWall {
+            temperature: t_cold,
+            wall_velocity: [0.0, 0.0],
+        },
+        north: BoundaryKind::DiffuseWall {
+            temperature: t_hot,
+            wall_velocity: [0.0, 0.0],
+        },
     };
     let config = CaseConfig { grid, bcs, gas };
 
@@ -271,7 +336,10 @@ fn wall_bounded_rarefied_flow_shows_temperature_jump() {
     for step in 0..2000 {
         solver.step(dt, &config.bcs);
         for &v in solver.wave.fields.rho.iter() {
-            assert!(v.is_finite() && v >= 0.0, "rho blew up/negative at step {step}");
+            assert!(
+                v.is_finite() && v >= 0.0,
+                "rho blew up/negative at step {step}"
+            );
         }
     }
 
@@ -285,7 +353,11 @@ fn wall_bounded_rarefied_flow_shows_temperature_jump() {
             sum += solver.wave.fields.temperature(c, r_gas, dof);
         }
         t_profile[j] = sum / nx as f64;
-        assert!(t_profile[j].is_finite() && t_profile[j] > 0.0, "T[{j}] invalid: {}", t_profile[j]);
+        assert!(
+            t_profile[j].is_finite() && t_profile[j] > 0.0,
+            "T[{j}] invalid: {}",
+            t_profile[j]
+        );
     }
 
     // Temperature-jump: near-wall cell temperature should measurably differ
@@ -324,12 +396,19 @@ fn diatomic_gas_model_gamma_matches_gh_reduction() {
         prandtl: 0.71,
         internal_dof: 2.0, // diatomic rigid rotor
     };
-    assert!((model.gamma() - 7.0 / 5.0).abs() < 1e-12, "gamma = {}", model.gamma());
+    assert!(
+        (model.gamma() - 7.0 / 5.0).abs() < 1e-12,
+        "gamma = {}",
+        model.gamma()
+    );
     assert!((model.total_dof() - 5.0).abs() < 1e-12);
 
     // Cross-check against the (g,h)-reduction machinery added for Part 2:
     let dof_total = janus_kinetic::maxwellian::dof_with_internal(model.internal_dof());
-    assert!((dof_total - model.total_dof()).abs() < 1e-12, "dof_with_internal must match GasModel::total_dof");
+    assert!(
+        (dof_total - model.total_dof()).abs() < 1e-12,
+        "dof_with_internal must match GasModel::total_dof"
+    );
 }
 
 /// 6. Spectral-collision H-theorem test: relative entropy (negative
@@ -412,10 +491,20 @@ fn two_dimensional_and_three_dimensional_solvers_agree_on_symmetric_couette() {
     let bcs2d = BoundaryAssignment {
         west: BoundaryKind::Periodic,
         east: BoundaryKind::Periodic,
-        south: BoundaryKind::DiffuseWall { temperature: t_wall, wall_velocity: [0.0, 0.0] },
-        north: BoundaryKind::DiffuseWall { temperature: t_wall, wall_velocity: [u_wall, 0.0] },
+        south: BoundaryKind::DiffuseWall {
+            temperature: t_wall,
+            wall_velocity: [0.0, 0.0],
+        },
+        north: BoundaryKind::DiffuseWall {
+            temperature: t_wall,
+            wall_velocity: [u_wall, 0.0],
+        },
     };
-    let config2d = CaseConfig { grid: grid2d, bcs: bcs2d, gas: gas2d };
+    let config2d = CaseConfig {
+        grid: grid2d,
+        bcs: bcs2d,
+        gas: gas2d,
+    };
     let (vgrid2d, vw2d) = VelocityGrid2D::simpson(1800.0, 21);
     let dist2d = Distribution::zeros(config2d.grid.ncells(), vgrid2d.clone(), vw2d.clone());
     let mut solver2d = DugksSolver::new(&config2d, dist2d);
@@ -429,21 +518,41 @@ fn two_dimensional_and_three_dimensional_solvers_agree_on_symmetric_couette() {
     // --- 3D run (thin slab, periodic z) ---
     let mut gas3d = GasProperties::monatomic_default();
     gas3d.vhs_omega = 0.81;
-    let grid3d = Grid3D::new(nx, ny, 1, height / nx as f64, height / ny as f64, height / nx as f64, [0.0, 0.0, 0.0]);
+    let grid3d = Grid3D::new(
+        nx,
+        ny,
+        1,
+        height / nx as f64,
+        height / ny as f64,
+        height / nx as f64,
+        [0.0, 0.0, 0.0],
+    );
     let bcs3d = BoundaryAssignment3D {
         west: BoundaryKind3D::Periodic,
         east: BoundaryKind3D::Periodic,
-        south: BoundaryKind3D::DiffuseWall { temperature: t_wall, wall_velocity: [0.0, 0.0, 0.0] },
-        north: BoundaryKind3D::DiffuseWall { temperature: t_wall, wall_velocity: [u_wall, 0.0, 0.0] },
+        south: BoundaryKind3D::DiffuseWall {
+            temperature: t_wall,
+            wall_velocity: [0.0, 0.0, 0.0],
+        },
+        north: BoundaryKind3D::DiffuseWall {
+            temperature: t_wall,
+            wall_velocity: [u_wall, 0.0, 0.0],
+        },
         down: BoundaryKind3D::Periodic,
         up: BoundaryKind3D::Periodic,
     };
-    let config3d = CaseConfig3D { grid: grid3d, bcs: bcs3d, gas: gas3d };
-    let (vgrid3d, vw3d) = VelocityGrid3D::gauss_hermite(config3d.gas.r_gas, t_wall, [0.0, 0.0, 0.0], 7);
+    let config3d = CaseConfig3D {
+        grid: grid3d,
+        bcs: bcs3d,
+        gas: gas3d,
+    };
+    let (vgrid3d, vw3d) =
+        VelocityGrid3D::gauss_hermite(config3d.gas.r_gas, t_wall, [0.0, 0.0, 0.0], 7);
     let mut dist3d = Distribution3D::zeros(config3d.grid.ncells(), vgrid3d.clone(), vw3d.clone());
     for c in 0..config3d.grid.ncells() {
         for (k, v) in vgrid3d.iter().enumerate() {
-            dist3d.f[c * dist3d.nv + k] = maxwellian_3d(rho0, [0.0, 0.0, 0.0], t_wall, config3d.gas.r_gas, *v);
+            dist3d.f[c * dist3d.nv + k] =
+                maxwellian_3d(rho0, [0.0, 0.0, 0.0], t_wall, config3d.gas.r_gas, *v);
         }
     }
     let mut solver3d = DugksSolver3D::new(&config3d, dist3d);
@@ -474,7 +583,10 @@ fn two_dimensional_and_three_dimensional_solvers_agree_on_symmetric_couette() {
         max_diff = max_diff.max((u2 - u3).abs());
     }
     let tol = 0.15 * u_wall;
-    assert!(max_diff < tol, "2D vs 3D Couette velocity profile disagreement {max_diff} exceeds tolerance {tol}");
+    assert!(
+        max_diff < tol,
+        "2D vs 3D Couette velocity profile disagreement {max_diff} exceeds tolerance {tol}"
+    );
 }
 
 // Test 8 (conservation-under-load-balancing / block decomposition) lives in

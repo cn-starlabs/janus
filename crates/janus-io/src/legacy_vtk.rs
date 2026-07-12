@@ -32,7 +32,10 @@ pub fn export_legacy_vtk(
     // with DIMENSIONS == number of cells + this is a known minor VTK
     // convention looseness accepted for a "fallback viewer", per spec:
     // "doesn't need to be fast" / is an escape hatch, not the canonical format).
-    let n = scalar_fields.first().map(|(_, d)| d.len()).unwrap_or(ncells);
+    let n = scalar_fields
+        .first()
+        .map(|(_, d)| d.len())
+        .unwrap_or(ncells);
     writeln!(w, "CELL_DATA {n}")?;
     for (name, data) in scalar_fields {
         writeln!(w, "SCALARS {name} double 1")?;

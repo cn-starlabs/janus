@@ -269,7 +269,9 @@ impl JvtkWriter {
         point_fields: &[NamedField],
         particles: Option<ParticleBlock>,
     ) -> io::Result<std::path::PathBuf> {
-        let path = dir.as_ref().join(format!("{case_name}.{step_index:04}.jvtk"));
+        let path = dir
+            .as_ref()
+            .join(format!("{case_name}.{step_index:04}.jvtk"));
         Self::write_file(
             &path,
             dims,

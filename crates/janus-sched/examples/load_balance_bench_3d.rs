@@ -92,8 +92,10 @@ fn main() {
         let speedup = static_elapsed.as_secs_f64() / deflect_elapsed.as_secs_f64();
         println!("deflection speedup: {speedup:.2}x");
     } else {
-        println!("no speedup observed in this run (see janus-sched module docs: block-local \
-                   fake-work granularity / core count on the actual test machine both affect this)");
+        println!(
+            "no speedup observed in this run (see janus-sched module docs: block-local \
+                   fake-work granularity / core count on the actual test machine both affect this)"
+        );
     }
 }
 

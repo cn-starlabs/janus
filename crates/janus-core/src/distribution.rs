@@ -36,12 +36,22 @@ impl Distribution {
     pub fn zeros(ncells: usize, vgrid: Vec<[f64; 2]>, vw: Vec<f64>) -> Self {
         let nv = vgrid.len();
         assert_eq!(nv, vw.len(), "vgrid and vw must have the same length");
-        Self { nv, vgrid, vw, f: vec![0.0; ncells * nv], h: vec![0.0; ncells * nv] }
+        Self {
+            nv,
+            vgrid,
+            vw,
+            f: vec![0.0; ncells * nv],
+            h: vec![0.0; ncells * nv],
+        }
     }
 
     #[inline]
     pub fn ncells(&self) -> usize {
-        if self.nv == 0 { 0 } else { self.f.len() / self.nv }
+        if self.nv == 0 {
+            0
+        } else {
+            self.f.len() / self.nv
+        }
     }
 
     #[inline]
@@ -135,12 +145,21 @@ impl Distribution3D {
     pub fn zeros(ncells: usize, vgrid: Vec<[f64; 3]>, vw: Vec<f64>) -> Self {
         let nv = vgrid.len();
         assert_eq!(nv, vw.len(), "vgrid and vw must have the same length");
-        Self { nv, vgrid, vw, f: vec![0.0; ncells * nv] }
+        Self {
+            nv,
+            vgrid,
+            vw,
+            f: vec![0.0; ncells * nv],
+        }
     }
 
     #[inline]
     pub fn ncells(&self) -> usize {
-        if self.nv == 0 { 0 } else { self.f.len() / self.nv }
+        if self.nv == 0 {
+            0
+        } else {
+            self.f.len() / self.nv
+        }
     }
 
     #[inline]
@@ -215,8 +234,14 @@ mod tests {
 
     #[test]
     fn distribution3d_moments_of_symmetric_set_are_zero_momentum() {
-        let vgrid =
-            vec![[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, -1.0]];
+        let vgrid = vec![
+            [1.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, -1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, -1.0],
+        ];
         let vw = vec![1.0 / 6.0; 6];
         let mut d = Distribution3D::zeros(1, vgrid, vw);
         for k in 0..6 {

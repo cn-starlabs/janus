@@ -35,7 +35,11 @@ use janus_kinetic::maxwellian::gh_equilibrium;
 use janus_kinetic::velocity_grid::VelocityGrid2D;
 
 fn periodic_case(nx: usize, ny: usize, dx: f64, dy: f64, gas: GasProperties) -> CaseConfig {
-    CaseConfig { grid: Grid2D::new(nx, ny, dx, dy, [0.0, 0.0]), bcs: BoundaryAssignment::all_periodic(), gas }
+    CaseConfig {
+        grid: Grid2D::new(nx, ny, dx, dy, [0.0, 0.0]),
+        bcs: BoundaryAssignment::all_periodic(),
+        gas,
+    }
 }
 
 fn init_uniform_ugkwp(solver: &mut UgkwpSolver, rho: f64, u: [f64; 2], t: f64) {

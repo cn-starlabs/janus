@@ -1,11 +1,13 @@
 //! Structured 2D Cartesian grid geometry.
 
+use serde::{Deserialize, Serialize};
+
 /// A uniform structured Cartesian grid, cell-centered finite-volume storage.
 ///
 /// Cells are indexed `(i, j)` with `i` in `[0, nx)` fastest-varying (row-major,
 /// C order) and `j` in `[0, ny)`. Cell `(i, j)` center is at
 /// `origin + ((i+0.5)*dx, (j+0.5)*dy)`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Grid2D {
     pub nx: usize,
     pub ny: usize,
@@ -16,9 +18,18 @@ pub struct Grid2D {
 
 impl Grid2D {
     pub fn new(nx: usize, ny: usize, dx: f64, dy: f64, origin: [f64; 2]) -> Self {
-        assert!(nx > 0 && ny > 0, "grid must have at least one cell in each dimension");
+        assert!(
+            nx > 0 && ny > 0,
+            "grid must have at least one cell in each dimension"
+        );
         assert!(dx > 0.0 && dy > 0.0, "grid spacing must be positive");
-        Self { nx, ny, dx, dy, origin }
+        Self {
+            nx,
+            ny,
+            dx,
+            dy,
+            origin,
+        }
     }
 
     #[inline]
@@ -52,19 +63,35 @@ impl Grid2D {
     /// or `None` at the boundary (caller applies BC/ghost logic instead).
     #[inline]
     pub fn east(&self, i: usize, j: usize) -> Option<(usize, usize)> {
-        if i + 1 < self.nx { Some((i + 1, j)) } else { None }
+        if i + 1 < self.nx {
+            Some((i + 1, j))
+        } else {
+            None
+        }
     }
     #[inline]
     pub fn west(&self, i: usize, j: usize) -> Option<(usize, usize)> {
-        if i > 0 { Some((i - 1, j)) } else { None }
+        if i > 0 {
+            Some((i - 1, j))
+        } else {
+            None
+        }
     }
     #[inline]
     pub fn north(&self, i: usize, j: usize) -> Option<(usize, usize)> {
-        if j + 1 < self.ny { Some((i, j + 1)) } else { None }
+        if j + 1 < self.ny {
+            Some((i, j + 1))
+        } else {
+            None
+        }
     }
     #[inline]
     pub fn south(&self, i: usize, j: usize) -> Option<(usize, usize)> {
-        if j > 0 { Some((i, j - 1)) } else { None }
+        if j > 0 {
+            Some((i, j - 1))
+        } else {
+            None
+        }
     }
 }
 

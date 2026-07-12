@@ -32,12 +32,28 @@ pub trait Collision {
     /// Equilibrium (post-collision target) `(g_eq, h_eq)` pair at discrete
     /// velocity `v` for the given macro state and total heat flux `q = (qx,
     /// qy)`.
-    fn equilibrium(&self, rho: f64, u: [f64; 2], t: f64, r_gas: f64, q: [f64; 2], v: [f64; 2]) -> (f64, f64);
+    fn equilibrium(
+        &self,
+        rho: f64,
+        u: [f64; 2],
+        t: f64,
+        r_gas: f64,
+        q: [f64; 2],
+        v: [f64; 2],
+    ) -> (f64, f64);
 
     /// Relaxation time `tau = mu / p` (mu = dynamic viscosity from VHS law,
     /// p = rho*R*T). Shared by both `g` and `h` (single relaxation time is
     /// the standard Shakhov/BGK-type assumption).
-    fn relaxation_time(&self, rho: f64, t: f64, r_gas: f64, mu_ref: f64, t_ref: f64, omega: f64) -> f64 {
+    fn relaxation_time(
+        &self,
+        rho: f64,
+        t: f64,
+        r_gas: f64,
+        mu_ref: f64,
+        t_ref: f64,
+        omega: f64,
+    ) -> f64 {
         let mu = mu_ref * (t / t_ref).powf(omega);
         let p = rho * r_gas * t;
         mu / p.max(f64::MIN_POSITIVE)
@@ -76,7 +92,15 @@ impl Shakhov {
 }
 
 impl Collision for Shakhov {
-    fn equilibrium(&self, rho: f64, u: [f64; 2], t: f64, r_gas: f64, q: [f64; 2], v: [f64; 2]) -> (f64, f64) {
+    fn equilibrium(
+        &self,
+        rho: f64,
+        u: [f64; 2],
+        t: f64,
+        r_gas: f64,
+        q: [f64; 2],
+        v: [f64; 2],
+    ) -> (f64, f64) {
         self.equilibrium_with_dof(rho, u, t, r_gas, q, v, DOF)
     }
 }

@@ -164,7 +164,9 @@ impl DugksSolver3D {
                 m[0] += w * vgrid[k][0];
                 m[1] += w * vgrid[k][1];
                 m[2] += w * vgrid[k][2];
-                let v2 = vgrid[k][0] * vgrid[k][0] + vgrid[k][1] * vgrid[k][1] + vgrid[k][2] * vgrid[k][2];
+                let v2 = vgrid[k][0] * vgrid[k][0]
+                    + vgrid[k][1] * vgrid[k][1]
+                    + vgrid[k][2] * vgrid[k][2];
                 e += 0.5 * w * v2;
             }
             self.fields.rho[c] = rho;
@@ -233,7 +235,11 @@ impl DugksSolver3D {
         let rho = self.fields.rho[c];
         let u = self.fields.velocity(c);
         let t = self.fields.temperature(c, self.gas_r, DOF);
-        let q = [self.fields.heat[0][c], self.fields.heat[1][c], self.fields.heat[2][c]];
+        let q = [
+            self.fields.heat[0][c],
+            self.fields.heat[1][c],
+            self.fields.heat[2][c],
+        ];
         (rho, u, t, q)
     }
 
@@ -284,12 +290,28 @@ impl DugksSolver3D {
             };
 
             let up: UpwindState3D = if vn >= 0.0 {
-                UpwindState3D { f: f_in_face, rho: rho_in, u: u_in, t: t_in, q: q_in, tau: tau_in }
+                UpwindState3D {
+                    f: f_in_face,
+                    rho: rho_in,
+                    u: u_in,
+                    t: t_in,
+                    q: q_in,
+                    tau: tau_in,
+                }
             } else {
-                UpwindState3D { f: f_out_face, rho: rho_out, u: u_out, t: t_out, q: q_out, tau: tau_out }
+                UpwindState3D {
+                    f: f_out_face,
+                    rho: rho_out,
+                    u: u_out,
+                    t: t_out,
+                    q: q_out,
+                    tau: tau_out,
+                }
             };
 
-            let feq = self.collision.equilibrium(up.rho, up.u, up.t, self.gas_r, up.q, v);
+            let feq = self
+                .collision
+                .equilibrium(up.rho, up.u, up.t, self.gas_r, up.q, v);
             let f_face = (up.tau * up.f + dt_half * feq) / (up.tau + dt_half);
             self.face_flux[k] = f_face * vn;
         }
@@ -298,7 +320,14 @@ impl DugksSolver3D {
     /// Boundary-face variant: `cin` is the interior cell, `normal` points
     /// out of the domain. Same direction-parameterized reuse as the
     /// interior case.
-    fn compute_boundary_face_flux(&mut self, cin: usize, normal: [f64; 3], face: Face, config_bcs: &BoundaryAssignment3D, dt: f64) {
+    fn compute_boundary_face_flux(
+        &mut self,
+        cin: usize,
+        normal: [f64; 3],
+        face: Face,
+        config_bcs: &BoundaryAssignment3D,
+        dt: f64,
+    ) {
         let nv = self.dist.nv;
         let (rho_in, u_in, t_in, q_in) = self.cell_macro(cin);
         let tau_in = self.tau_scratch[cin];
@@ -307,17 +336,30 @@ impl DugksSolver3D {
         let f_interior: Vec<f64> = self.dist.f[cin * nv..cin * nv + nv].to_vec();
         let vgrid = self.dist.vgrid.clone();
         let vw = self.dist.vw.clone();
-        bc_kernel.apply(&f_interior, &vgrid, &vw, normal, self.gas_r, &mut self.ghost_buf);
+        bc_kernel.apply(
+            &f_interior,
+            &vgrid,
+            &vw,
+            normal,
+            self.gas_r,
+            &mut self.ghost_buf,
+        );
 
         let dt_half = 0.5 * dt;
         for k in 0..nv {
             let v = vgrid[k];
             let vn = v[0] * normal[0] + v[1] * normal[1] + v[2] * normal[2];
-            let f_up = if vn >= 0.0 { f_interior[k] } else { self.ghost_buf[k] };
+            let f_up = if vn >= 0.0 {
+                f_interior[k]
+            } else {
+                self.ghost_buf[k]
+            };
             // DESIGN: interior cell's own macro state used for the
             // equilibrium at incoming (ghost-sourced) nodes too, mirroring
             // the 2D solver's identical simplification.
-            let feq = self.collision.equilibrium(rho_in, u_in, t_in, self.gas_r, q_in, v);
+            let feq = self
+                .collision
+                .equilibrium(rho_in, u_in, t_in, self.gas_r, q_in, v);
             let f_face = (tau_in * f_up + dt_half * feq) / (tau_in + dt_half);
             self.face_flux[k] = f_face * vn;
         }
@@ -368,8 +410,14 @@ impl DugksSolver3D {
         for c in 0..ncells {
             let rho = self.fields.rho[c];
             let t = self.fields.temperature(c, self.gas_r, DOF);
-            self.tau_scratch[c] =
-                self.collision.relaxation_time(rho, t, self.gas_r, self.mu_ref, self.t_ref, self.omega);
+            self.tau_scratch[c] = self.collision.relaxation_time(
+                rho,
+                t,
+                self.gas_r,
+                self.mu_ref,
+                self.t_ref,
+                self.omega,
+            );
         }
 
         // Per-face area (the face perpendicular to the axis being crossed).
@@ -412,11 +460,29 @@ impl DugksSolver3D {
                         } else {
                             None
                         };
-                        self.compute_interior_face_flux(cin, cout, far_in, far_out, [1.0, 0.0, 0.0], dt);
+                        self.compute_interior_face_flux(
+                            cin,
+                            cout,
+                            far_in,
+                            far_out,
+                            [1.0, 0.0, 0.0],
+                            dt,
+                        );
                         self.accumulate_interior(cin, cout, area_x, dt, vol, nv);
                     } else {
                         self.handle_boundary_or_periodic(
-                            cin, i, j, k, [1.0, 0.0, 0.0], Face::East, bc_east, config_bcs, dt, vol, area_x, nv,
+                            cin,
+                            i,
+                            j,
+                            k,
+                            [1.0, 0.0, 0.0],
+                            Face::East,
+                            bc_east,
+                            config_bcs,
+                            dt,
+                            vol,
+                            area_x,
+                            nv,
                             |g, _ii, jj, kk| g.idx(0, jj, kk),
                             |g, _ii, jj, kk| if nx > 1 { Some(g.idx(1, jj, kk)) } else { None },
                             (i, j, k),
@@ -440,11 +506,29 @@ impl DugksSolver3D {
                         } else {
                             None
                         };
-                        self.compute_interior_face_flux(cin, cout, far_in, far_out, [0.0, 1.0, 0.0], dt);
+                        self.compute_interior_face_flux(
+                            cin,
+                            cout,
+                            far_in,
+                            far_out,
+                            [0.0, 1.0, 0.0],
+                            dt,
+                        );
                         self.accumulate_interior(cin, cout, area_y, dt, vol, nv);
                     } else {
                         self.handle_boundary_or_periodic(
-                            cin, i, j, k, [0.0, 1.0, 0.0], Face::North, bc_north, config_bcs, dt, vol, area_y, nv,
+                            cin,
+                            i,
+                            j,
+                            k,
+                            [0.0, 1.0, 0.0],
+                            Face::North,
+                            bc_north,
+                            config_bcs,
+                            dt,
+                            vol,
+                            area_y,
+                            nv,
                             |g, ii, _jj, kk| g.idx(ii, 0, kk),
                             |g, ii, _jj, kk| if ny > 1 { Some(g.idx(ii, 1, kk)) } else { None },
                             (i, j, k),
@@ -468,11 +552,29 @@ impl DugksSolver3D {
                         } else {
                             None
                         };
-                        self.compute_interior_face_flux(cin, cout, far_in, far_out, [0.0, 0.0, 1.0], dt);
+                        self.compute_interior_face_flux(
+                            cin,
+                            cout,
+                            far_in,
+                            far_out,
+                            [0.0, 0.0, 1.0],
+                            dt,
+                        );
                         self.accumulate_interior(cin, cout, area_z, dt, vol, nv);
                     } else {
                         self.handle_boundary_or_periodic(
-                            cin, i, j, k, [0.0, 0.0, 1.0], Face::Up, bc_up, config_bcs, dt, vol, area_z, nv,
+                            cin,
+                            i,
+                            j,
+                            k,
+                            [0.0, 0.0, 1.0],
+                            Face::Up,
+                            bc_up,
+                            config_bcs,
+                            dt,
+                            vol,
+                            area_z,
+                            nv,
                             |g, ii, jj, _kk| g.idx(ii, jj, 0),
                             |g, ii, jj, _kk| if nz > 1 { Some(g.idx(ii, jj, 1)) } else { None },
                             (i, j, k),
@@ -483,21 +585,54 @@ impl DugksSolver3D {
                     // -x faces are covered by the neighbor's +x pass above).
                     if i == 0 {
                         self.handle_low_boundary_or_periodic(
-                            cin, i, j, k, [-1.0, 0.0, 0.0], Face::West, bc_west, config_bcs, dt, vol, area_x, nv,
+                            cin,
+                            i,
+                            j,
+                            k,
+                            [-1.0, 0.0, 0.0],
+                            Face::West,
+                            bc_west,
+                            config_bcs,
+                            dt,
+                            vol,
+                            area_x,
+                            nv,
                             |g, _ii, jj, kk| g.idx(g.nx - 1, jj, kk),
                         );
                     }
                     // -y face (south)
                     if j == 0 {
                         self.handle_low_boundary_or_periodic(
-                            cin, i, j, k, [0.0, -1.0, 0.0], Face::South, bc_south, config_bcs, dt, vol, area_y, nv,
+                            cin,
+                            i,
+                            j,
+                            k,
+                            [0.0, -1.0, 0.0],
+                            Face::South,
+                            bc_south,
+                            config_bcs,
+                            dt,
+                            vol,
+                            area_y,
+                            nv,
                             |g, ii, _jj, kk| g.idx(ii, g.ny - 1, kk),
                         );
                     }
                     // -z face (down)
                     if k == 0 {
                         self.handle_low_boundary_or_periodic(
-                            cin, i, j, k, [0.0, 0.0, -1.0], Face::Down, bc_down, config_bcs, dt, vol, area_z, nv,
+                            cin,
+                            i,
+                            j,
+                            k,
+                            [0.0, 0.0, -1.0],
+                            Face::Down,
+                            bc_down,
+                            config_bcs,
+                            dt,
+                            vol,
+                            area_z,
+                            nv,
                             |g, ii, jj, _kk| g.idx(ii, jj, g.nz - 1),
                         );
                     }
@@ -536,7 +671,11 @@ impl DugksSolver3D {
             // pre-floor (transport-conserved) moments cached in `relax_tgt`.
             let s = self.relax_tgt[c];
             let rho = s[0];
-            let u = if rho > 0.0 { [s[1] / rho, s[2] / rho, s[3] / rho] } else { [0.0; 3] };
+            let u = if rho > 0.0 {
+                [s[1] / rho, s[2] / rho, s[3] / rho]
+            } else {
+                [0.0; 3]
+            };
             // e = 0.5*rho*|u|^2 + 0.5*rho*DOF*R*T  =>  T = (2e/rho - |u|^2)/(DOF*R)
             let umag2 = u[0] * u[0] + u[1] * u[1] + u[2] * u[2];
             // Guard against a non-positive temperature (possible transiently in
@@ -553,7 +692,14 @@ impl DugksSolver3D {
             };
             let q = [s[5], s[6], s[7]];
             let tgt = [s[0], s[1], s[2], s[3], s[4]];
-            let tau_c = self.collision.relaxation_time(rho, t, self.gas_r, self.mu_ref, self.t_ref, self.omega);
+            let tau_c = self.collision.relaxation_time(
+                rho,
+                t,
+                self.gas_r,
+                self.mu_ref,
+                self.t_ref,
+                self.omega,
+            );
             // Thermal velocity scale used to NORMALIZE the peculiar-basis columns
             // {1, cx/sig, cy/sig, cz/sig, c^2/sig^2} so every basis function is
             // O(1) near the thermal core. Without this, the c^2 column's entries
@@ -646,7 +792,15 @@ impl DugksSolver3D {
     /// (subtract from `cin`, add to `cout`) — shared bookkeeping for every
     /// interior-face call site.
     #[inline]
-    fn accumulate_interior(&mut self, cin: usize, cout: usize, area: f64, dt: f64, vol: f64, nv: usize) {
+    fn accumulate_interior(
+        &mut self,
+        cin: usize,
+        cout: usize,
+        area: f64,
+        dt: f64,
+        vol: f64,
+        nv: usize,
+    ) {
         for k in 0..nv {
             let flux = self.face_flux[k] * area * dt / vol;
             self.dist_scratch.f[cin * nv + k] -= flux;
@@ -686,11 +840,7 @@ impl DugksSolver3D {
                 // cout (cout is the wrapped low-index cell 0, so its "far"
                 // neighbor is cell 1 along this axis, via `far_wrap`).
                 let far_in = {
-                    let (di, dj, dk) = (
-                        normal[0] as isize,
-                        normal[1] as isize,
-                        normal[2] as isize,
-                    );
+                    let (di, dj, dk) = (normal[0] as isize, normal[1] as isize, normal[2] as isize);
                     let fi = i0 as isize - di;
                     let fj = j0 as isize - dj;
                     let fk = k0 as isize - dk;
@@ -828,7 +978,12 @@ mod tests {
     #[test]
     fn conservation_on_periodic_domain_3d() {
         let config = periodic_case(3, 3, 3);
-        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(287.0, 2000.0, [0.0, 0.0, 0.0], 6);
+        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(
+            287.0,
+            2000.0,
+            [0.0, 0.0, 0.0],
+            6,
+        );
         let dist = Distribution3D::zeros(config.grid.ncells(), vgrid, vw);
         let mut solver = DugksSolver3D::new(&config, dist);
         init_uniform(&mut solver, 1.0, [20.0, -10.0, 5.0], 300.0);
@@ -866,7 +1021,12 @@ mod tests {
     #[test]
     fn step_produces_finite_values_3d() {
         let config = periodic_case(3, 3, 3);
-        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(287.0, 1500.0, [0.0, 0.0, 0.0], 5);
+        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(
+            287.0,
+            1500.0,
+            [0.0, 0.0, 0.0],
+            5,
+        );
         let dist = Distribution3D::zeros(config.grid.ncells(), vgrid, vw);
         let mut solver = DugksSolver3D::new(&config, dist);
         init_uniform(&mut solver, 1.2, [5.0, -3.0, 2.0], 320.0);
@@ -876,7 +1036,10 @@ mod tests {
             solver.step(dt, &config.bcs);
         }
 
-        assert!(solver.dist.f.iter().all(|v| v.is_finite()), "f has non-finite values");
+        assert!(
+            solver.dist.f.iter().all(|v| v.is_finite()),
+            "f has non-finite values"
+        );
         assert!(solver.fields.rho.iter().all(|v| v.is_finite()));
         for d in 0..3 {
             assert!(solver.fields.mom[d].iter().all(|v| v.is_finite()));
@@ -893,7 +1056,12 @@ mod tests {
     #[test]
     fn z_face_flux_matches_hand_rotated_x_face() {
         let config = periodic_case(2, 2, 2);
-        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(287.0, 1500.0, [0.0, 0.0, 0.0], 5);
+        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(
+            287.0,
+            1500.0,
+            [0.0, 0.0, 0.0],
+            5,
+        );
         let dist = Distribution3D::zeros(config.grid.ncells(), vgrid.clone(), vw.clone());
         let mut solver = DugksSolver3D::new(&config, dist);
 
@@ -905,14 +1073,23 @@ mod tests {
         let nv = solver.dist.nv;
         let r_gas = solver.gas_r;
         for k in 0..nv {
-            solver.dist.f[ca * nv + k] = crate::maxwellian3d::maxwellian_3d(1.0, [0.0, 0.0, 30.0], 310.0, r_gas, vgrid[k]);
-            solver.dist.f[cb * nv + k] = crate::maxwellian3d::maxwellian_3d(1.1, [0.0, 0.0, 10.0], 300.0, r_gas, vgrid[k]);
+            solver.dist.f[ca * nv + k] =
+                crate::maxwellian3d::maxwellian_3d(1.0, [0.0, 0.0, 30.0], 310.0, r_gas, vgrid[k]);
+            solver.dist.f[cb * nv + k] =
+                crate::maxwellian3d::maxwellian_3d(1.1, [0.0, 0.0, 10.0], 300.0, r_gas, vgrid[k]);
         }
         solver.update_moments();
         for c in 0..solver.grid.ncells() {
             let rho = solver.fields.rho[c];
             let t = solver.fields.temperature(c, r_gas, DOF);
-            solver.tau_scratch[c] = solver.collision.relaxation_time(rho, t, r_gas, solver.mu_ref, solver.t_ref, solver.omega);
+            solver.tau_scratch[c] = solver.collision.relaxation_time(
+                rho,
+                t,
+                r_gas,
+                solver.mu_ref,
+                solver.t_ref,
+                solver.omega,
+            );
         }
         let dt = 1e-6;
         solver.compute_interior_face_flux(ca, cb, None, None, [0.0, 0.0, 1.0], dt);
@@ -929,14 +1106,23 @@ mod tests {
         let ca2 = solver2.grid.idx(0, 0, 0);
         let cb2 = solver2.grid.idx(1, 0, 0);
         for k in 0..nv {
-            solver2.dist.f[ca2 * nv + k] = crate::maxwellian3d::maxwellian_3d(1.0, [30.0, 0.0, 0.0], 310.0, r_gas, vgrid[k]);
-            solver2.dist.f[cb2 * nv + k] = crate::maxwellian3d::maxwellian_3d(1.1, [10.0, 0.0, 0.0], 300.0, r_gas, vgrid[k]);
+            solver2.dist.f[ca2 * nv + k] =
+                crate::maxwellian3d::maxwellian_3d(1.0, [30.0, 0.0, 0.0], 310.0, r_gas, vgrid[k]);
+            solver2.dist.f[cb2 * nv + k] =
+                crate::maxwellian3d::maxwellian_3d(1.1, [10.0, 0.0, 0.0], 300.0, r_gas, vgrid[k]);
         }
         solver2.update_moments();
         for c in 0..solver2.grid.ncells() {
             let rho = solver2.fields.rho[c];
             let t = solver2.fields.temperature(c, r_gas, DOF);
-            solver2.tau_scratch[c] = solver2.collision.relaxation_time(rho, t, r_gas, solver2.mu_ref, solver2.t_ref, solver2.omega);
+            solver2.tau_scratch[c] = solver2.collision.relaxation_time(
+                rho,
+                t,
+                r_gas,
+                solver2.mu_ref,
+                solver2.t_ref,
+                solver2.omega,
+            );
         }
         solver2.compute_interior_face_flux(ca2, cb2, None, None, [1.0, 0.0, 0.0], dt);
         let x_flux_mass: f64 = (0..nv).map(|k| solver2.face_flux[k] * vw[k]).sum();
@@ -955,7 +1141,12 @@ mod tests {
         // FV update still conserves mass/energy exactly with second-order
         // spatial reconstruction.
         let config = periodic_case(4, 4, 4);
-        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(287.0, 2000.0, [0.0, 0.0, 0.0], 6);
+        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(
+            287.0,
+            2000.0,
+            [0.0, 0.0, 0.0],
+            6,
+        );
         let dist = Distribution3D::zeros(config.grid.ncells(), vgrid, vw);
         let mut solver = DugksSolver3D::new(&config, dist);
         init_uniform(&mut solver, 1.0, [15.0, -5.0, 3.0], 300.0);
@@ -974,8 +1165,14 @@ mod tests {
         let after = solver.totals();
 
         let tol = 1e-2;
-        assert!((after.0 - before.0).abs() / before.0.abs().max(1e-30) < tol, "mass drift");
-        assert!((after.4 - before.4).abs() / before.4.abs().max(1e-30) < tol, "energy drift");
+        assert!(
+            (after.0 - before.0).abs() / before.0.abs().max(1e-30) < tol,
+            "mass drift"
+        );
+        assert!(
+            (after.4 - before.4).abs() / before.4.abs().max(1e-30) < tol,
+            "energy drift"
+        );
         assert!(solver.dist.f.iter().all(|v| v.is_finite()));
     }
 
@@ -989,7 +1186,8 @@ mod tests {
     fn rk2_scheme_conserves_and_stays_finite_3d() {
         let config = periodic_case(3, 3, 3);
         let u_flow = [5.0, -3.0, 2.0];
-        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(287.0, 400.0, u_flow, 8);
+        let (vgrid, vw) =
+            crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(287.0, 400.0, u_flow, 8);
         let dist = Distribution3D::zeros(config.grid.ncells(), vgrid, vw);
         let mut solver = DugksSolver3D::new(&config, dist);
         solver.scheme = crate::solver::TimeScheme::Rk2;
@@ -1003,15 +1201,26 @@ mod tests {
         let after = solver.totals();
 
         let tol = 1e-2;
-        assert!((after.0 - before.0).abs() / before.0.abs().max(1e-30) < tol, "mass drift: {before:?} vs {after:?}");
-        assert!((after.4 - before.4).abs() / before.4.abs().max(1e-30) < tol, "energy drift");
+        assert!(
+            (after.0 - before.0).abs() / before.0.abs().max(1e-30) < tol,
+            "mass drift: {before:?} vs {after:?}"
+        );
+        assert!(
+            (after.4 - before.4).abs() / before.4.abs().max(1e-30) < tol,
+            "energy drift"
+        );
         assert!(solver.dist.f.iter().all(|v| v.is_finite()));
     }
 
     #[test]
     fn rk2_default_scheme_is_euler_3d() {
         let config = periodic_case(2, 2, 2);
-        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(287.0, 1500.0, [0.0, 0.0, 0.0], 5);
+        let (vgrid, vw) = crate::velocity_grid3d::VelocityGrid3D::gauss_hermite(
+            287.0,
+            1500.0,
+            [0.0, 0.0, 0.0],
+            5,
+        );
         let dist = Distribution3D::zeros(config.grid.ncells(), vgrid, vw);
         let solver = DugksSolver3D::new(&config, dist);
         assert_eq!(solver.scheme, crate::solver::TimeScheme::Euler);

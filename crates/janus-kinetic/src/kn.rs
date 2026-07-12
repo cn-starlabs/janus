@@ -38,15 +38,31 @@ pub fn update_kn_loc(grid: &Grid2D, fields: &mut MacroFields, mu: &[f64], r_gas:
             let rho_c = rho[c].max(f64::MIN_POSITIVE);
 
             let (rho_w, rho_e) = if nx > 1 {
-                let w = if i > 0 { rho[grid.idx(i - 1, j)] } else { rho[grid.idx(i, j)] };
-                let e = if i + 1 < nx { rho[grid.idx(i + 1, j)] } else { rho[grid.idx(i, j)] };
+                let w = if i > 0 {
+                    rho[grid.idx(i - 1, j)]
+                } else {
+                    rho[grid.idx(i, j)]
+                };
+                let e = if i + 1 < nx {
+                    rho[grid.idx(i + 1, j)]
+                } else {
+                    rho[grid.idx(i, j)]
+                };
                 (w, e)
             } else {
                 (rho_c, rho_c)
             };
             let (rho_s, rho_n) = if ny > 1 {
-                let s = if j > 0 { rho[grid.idx(i, j - 1)] } else { rho[grid.idx(i, j)] };
-                let n = if j + 1 < ny { rho[grid.idx(i, j + 1)] } else { rho[grid.idx(i, j)] };
+                let s = if j > 0 {
+                    rho[grid.idx(i, j - 1)]
+                } else {
+                    rho[grid.idx(i, j)]
+                };
+                let n = if j + 1 < ny {
+                    rho[grid.idx(i, j + 1)]
+                } else {
+                    rho[grid.idx(i, j)]
+                };
                 (s, n)
             } else {
                 (rho_c, rho_c)
@@ -87,7 +103,11 @@ mod tests {
         let mu = vec![2e-5; grid.ncells()];
         update_kn_loc(&grid, &mut fields, &mu, 287.0);
         for c in 0..grid.ncells() {
-            assert!(fields.kn_loc[c].abs() < 1e-12, "kn_loc[{c}] = {}", fields.kn_loc[c]);
+            assert!(
+                fields.kn_loc[c].abs() < 1e-12,
+                "kn_loc[{c}] = {}",
+                fields.kn_loc[c]
+            );
         }
     }
 }

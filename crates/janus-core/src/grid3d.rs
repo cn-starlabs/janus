@@ -37,10 +37,32 @@ pub struct Grid3D {
 }
 
 impl Grid3D {
-    pub fn new(nx: usize, ny: usize, nz: usize, dx: f64, dy: f64, dz: f64, origin: [f64; 3]) -> Self {
-        assert!(nx > 0 && ny > 0 && nz > 0, "grid must have at least one cell in each dimension");
-        assert!(dx > 0.0 && dy > 0.0 && dz > 0.0, "grid spacing must be positive");
-        Self { nx, ny, nz, dx, dy, dz, origin }
+    pub fn new(
+        nx: usize,
+        ny: usize,
+        nz: usize,
+        dx: f64,
+        dy: f64,
+        dz: f64,
+        origin: [f64; 3],
+    ) -> Self {
+        assert!(
+            nx > 0 && ny > 0 && nz > 0,
+            "grid must have at least one cell in each dimension"
+        );
+        assert!(
+            dx > 0.0 && dy > 0.0 && dz > 0.0,
+            "grid spacing must be positive"
+        );
+        Self {
+            nx,
+            ny,
+            nz,
+            dx,
+            dy,
+            dz,
+            origin,
+        }
     }
 
     /// Build a 3D grid from an existing 2D grid, with a single layer in `z`
@@ -50,7 +72,15 @@ impl Grid3D {
     /// callers must supply it explicitly to avoid a silent physical-units
     /// guess).
     pub fn from_2d(g: &super::grid::Grid2D, dz: f64) -> Self {
-        Self::new(g.nx, g.ny, 1, g.dx, g.dy, dz, [g.origin[0], g.origin[1], 0.0])
+        Self::new(
+            g.nx,
+            g.ny,
+            1,
+            g.dx,
+            g.dy,
+            dz,
+            [g.origin[0], g.origin[1], 0.0],
+        )
     }
 
     #[inline]
@@ -100,29 +130,53 @@ impl Grid3D {
     /// applies BC/ghost logic instead, same convention as `Grid2D`).
     #[inline]
     pub fn east(&self, i: usize, j: usize, k: usize) -> Option<(usize, usize, usize)> {
-        if i + 1 < self.nx { Some((i + 1, j, k)) } else { None }
+        if i + 1 < self.nx {
+            Some((i + 1, j, k))
+        } else {
+            None
+        }
     }
     #[inline]
     pub fn west(&self, i: usize, j: usize, k: usize) -> Option<(usize, usize, usize)> {
-        if i > 0 { Some((i - 1, j, k)) } else { None }
+        if i > 0 {
+            Some((i - 1, j, k))
+        } else {
+            None
+        }
     }
     #[inline]
     pub fn north(&self, i: usize, j: usize, k: usize) -> Option<(usize, usize, usize)> {
-        if j + 1 < self.ny { Some((i, j + 1, k)) } else { None }
+        if j + 1 < self.ny {
+            Some((i, j + 1, k))
+        } else {
+            None
+        }
     }
     #[inline]
     pub fn south(&self, i: usize, j: usize, k: usize) -> Option<(usize, usize, usize)> {
-        if j > 0 { Some((i, j - 1, k)) } else { None }
+        if j > 0 {
+            Some((i, j - 1, k))
+        } else {
+            None
+        }
     }
     /// `+z` neighbor ("top", the face a 2D solver has no equivalent of).
     #[inline]
     pub fn up(&self, i: usize, j: usize, k: usize) -> Option<(usize, usize, usize)> {
-        if k + 1 < self.nz { Some((i, j, k + 1)) } else { None }
+        if k + 1 < self.nz {
+            Some((i, j, k + 1))
+        } else {
+            None
+        }
     }
     /// `-z` neighbor ("bottom").
     #[inline]
     pub fn down(&self, i: usize, j: usize, k: usize) -> Option<(usize, usize, usize)> {
-        if k > 0 { Some((i, j, k - 1)) } else { None }
+        if k > 0 {
+            Some((i, j, k - 1))
+        } else {
+            None
+        }
     }
 
     /// `[dims]` triple in the `.jvtk` header's `"dims": [nx, ny, nz]` sense
@@ -207,7 +261,9 @@ mod tests {
     fn z_face_neighbor_index_offset_is_one_plane() {
         let g = Grid3D::new(3, 3, 3, 1.0, 1.0, 1.0, [0.0, 0.0, 0.0]);
         let c = g.idx(1, 1, 1);
-        let (ui, uj, uk) = g.up(1, 1, 1).expect("k=1 has a k=2 neighbor in a 3-layer grid");
+        let (ui, uj, uk) = g
+            .up(1, 1, 1)
+            .expect("k=1 has a k=2 neighbor in a 3-layer grid");
         let c_up = g.idx(ui, uj, uk);
         assert_eq!(c_up - c, g.plane_cells());
         let (di, dj, dk) = g.down(1, 1, 1).expect("k=1 has a k=0 neighbor");

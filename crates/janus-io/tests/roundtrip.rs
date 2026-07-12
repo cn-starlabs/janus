@@ -18,9 +18,21 @@ fn roundtrip_bit_exact() {
     let energy: Vec<f32> = (0..ncells).map(|i| 300.0 + i as f32).collect();
 
     let cell_fields = vec![
-        NamedField { name: "rho".into(), comps: 1, data: FieldData::F64(&rho) },
-        NamedField { name: "mom_x".into(), comps: 1, data: FieldData::F64(&mom_x) },
-        NamedField { name: "energy".into(), comps: 1, data: FieldData::F32(&energy) },
+        NamedField {
+            name: "rho".into(),
+            comps: 1,
+            data: FieldData::F64(&rho),
+        },
+        NamedField {
+            name: "mom_x".into(),
+            comps: 1,
+            data: FieldData::F64(&mom_x),
+        },
+        NamedField {
+            name: "energy".into(),
+            comps: 1,
+            data: FieldData::F32(&energy),
+        },
     ];
 
     JvtkWriter::write_file(
@@ -94,7 +106,11 @@ fn roundtrip_3d_nz_greater_than_one() {
         }
     }
 
-    let cell_fields = vec![NamedField { name: "rho".into(), comps: 1, data: FieldData::F64(&rho) }];
+    let cell_fields = vec![NamedField {
+        name: "rho".into(),
+        comps: 1,
+        data: FieldData::F64(&rho),
+    }];
 
     JvtkWriter::write_file(
         &path,
@@ -116,7 +132,11 @@ fn roundtrip_3d_nz_greater_than_one() {
     assert_eq!(h.dims[2], 4, "nz must round-trip as dims[2]");
 
     let rho_back = reader.cell_field_f64("rho").unwrap();
-    assert_eq!(rho_back, rho.as_slice(), "3D C-order field data must round-trip bit-exactly");
+    assert_eq!(
+        rho_back,
+        rho.as_slice(),
+        "3D C-order field data must round-trip bit-exactly"
+    );
 
     // Spot-check a few specific (i,j,k) decode correctly through Grid3D.
     for &(i, j, k) in &[(0usize, 0usize, 0usize), (2, 1, 3), (1, 0, 2)] {
@@ -133,7 +153,11 @@ fn series_naming() {
     let dir = std::env::temp_dir().join(format!("janus_io_series_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let rho = vec![1.0f64; 4];
-    let fields = vec![NamedField { name: "rho".into(), comps: 1, data: FieldData::F64(&rho) }];
+    let fields = vec![NamedField {
+        name: "rho".into(),
+        comps: 1,
+        data: FieldData::F64(&rho),
+    }];
     let path = JvtkWriter::write_series_step(
         &dir,
         "case",
@@ -149,6 +173,9 @@ fn series_naming() {
         None,
     )
     .unwrap();
-    assert_eq!(path.file_name().unwrap().to_str().unwrap(), "case.0007.jvtk");
+    assert_eq!(
+        path.file_name().unwrap().to_str().unwrap(),
+        "case.0007.jvtk"
+    );
     std::fs::remove_dir_all(&dir).ok();
 }

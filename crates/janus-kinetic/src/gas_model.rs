@@ -381,7 +381,10 @@ impl CustomGasModel {
 
     /// Attach a custom thermal-conductivity callback, overriding the
     /// trait's default Prandtl-derived formula.
-    pub fn with_thermal_conductivity(mut self, f: impl Fn(f64, f64) -> f64 + Send + Sync + 'static) -> Self {
+    pub fn with_thermal_conductivity(
+        mut self,
+        f: impl Fn(f64, f64) -> f64 + Send + Sync + 'static,
+    ) -> Self {
         self.thermal_conductivity_fn = Some(Box::new(f));
         self
     }
@@ -460,7 +463,12 @@ mod tests {
         let rho = 1.2;
         let t = 300.0;
         assert!((model.pressure(rho, t) - rho * gp.r_gas * t).abs() < 1e-9);
-        assert!((model.viscosity(rho, t) - janus_core::units::vhs_viscosity(t, gp.mu_ref, gp.t_ref, gp.vhs_omega)).abs() < 1e-15);
+        assert!(
+            (model.viscosity(rho, t)
+                - janus_core::units::vhs_viscosity(t, gp.mu_ref, gp.t_ref, gp.vhs_omega))
+            .abs()
+                < 1e-15
+        );
         assert!((model.gamma() - 5.0 / 3.0).abs() < 1e-12);
     }
 
@@ -477,8 +485,14 @@ mod tests {
         };
         let rho = 1.2;
         let t = 300.0;
-        assert!((model.pressure(rho, t) - rho * 287.0 * t).abs() < 1e-6, "should reduce to ideal gas at B=C=0");
-        assert!((model.gamma() - 7.0 / 5.0).abs() < 1e-12, "diatomic gamma should be 7/5");
+        assert!(
+            (model.pressure(rho, t) - rho * 287.0 * t).abs() < 1e-6,
+            "should reduce to ideal gas at B=C=0"
+        );
+        assert!(
+            (model.gamma() - 7.0 / 5.0).abs() < 1e-12,
+            "diatomic gamma should be 7/5"
+        );
     }
 
     #[test]
@@ -497,14 +511,20 @@ mod tests {
             t_ref: 273.15,
             omega: 0.74,
             prandtl: 0.71,
-            coeffs: VirialCoefficients { b0: 5.0e-2, ..Default::default() }, // m^3/kg-scale, exaggerated for a clear test signal
+            coeffs: VirialCoefficients {
+                b0: 5.0e-2,
+                ..Default::default()
+            }, // m^3/kg-scale, exaggerated for a clear test signal
             internal_dof: 0.0,
         };
         let rho = 10.0;
         let t = 300.0;
         let mu_dense = model.viscosity(rho, t);
         let mu_dilute = janus_core::units::vhs_viscosity(t, model.mu_ref, model.t_ref, model.omega);
-        assert!(mu_dense > mu_dilute, "Enskog-corrected viscosity {mu_dense} should exceed dilute value {mu_dilute}");
+        assert!(
+            mu_dense > mu_dilute,
+            "Enskog-corrected viscosity {mu_dense} should exceed dilute value {mu_dilute}"
+        );
         // And the correction must saturate (clamped eta <= 0.5) rather than
         // diverge for a very large, physically extreme density.
         let mu_extreme = model.viscosity(1.0e6, t);
@@ -519,14 +539,20 @@ mod tests {
             t_ref: 273.15,
             omega: 0.74,
             prandtl: 0.71,
-            coeffs: VirialCoefficients { b0: -1.0e-3, ..Default::default() },
+            coeffs: VirialCoefficients {
+                b0: -1.0e-3,
+                ..Default::default()
+            },
             internal_dof: 0.0,
         };
         let rho = 10.0; // higher density to make the correction visible
         let t = 300.0;
         let p_ideal = rho * 287.0 * t;
         let p_virial = model.pressure(rho, t);
-        assert!((p_virial - p_ideal).abs() > 1.0, "virial correction should be nonzero at finite B*rho");
+        assert!(
+            (p_virial - p_ideal).abs() > 1.0,
+            "virial correction should be nonzero at finite B*rho"
+        );
     }
 
     #[test]

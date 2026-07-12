@@ -52,8 +52,14 @@ fn couette_transition_regime_no_blowup_and_shows_slip() {
     let bcs = BoundaryAssignment {
         west: BoundaryKind::Periodic,
         east: BoundaryKind::Periodic,
-        south: BoundaryKind::DiffuseWall { temperature: t_wall, wall_velocity: [0.0, 0.0] },
-        north: BoundaryKind::DiffuseWall { temperature: t_wall, wall_velocity: [u_wall, 0.0] },
+        south: BoundaryKind::DiffuseWall {
+            temperature: t_wall,
+            wall_velocity: [0.0, 0.0],
+        },
+        north: BoundaryKind::DiffuseWall {
+            temperature: t_wall,
+            wall_velocity: [u_wall, 0.0],
+        },
     };
     let config = CaseConfig { grid, bcs, gas };
 
@@ -78,13 +84,19 @@ fn couette_transition_regime_no_blowup_and_shows_slip() {
         solver.step(dt, &config.bcs);
         // No NaN/Inf/blowup check every step (cheap, catches divergence early).
         for &v in solver.wave.fields.rho.iter() {
-            assert!(v.is_finite() && v >= 0.0, "rho blew up/negative at step {step}: {v}");
+            assert!(
+                v.is_finite() && v >= 0.0,
+                "rho blew up/negative at step {step}: {v}"
+            );
         }
         for &v in solver.wave.fields.mom[0].iter() {
             assert!(v.is_finite(), "mom_x non-finite at step {step}: {v}");
         }
         for &v in solver.wave.fields.energy.iter() {
-            assert!(v.is_finite() && v >= 0.0, "energy blew up/negative at step {step}: {v}");
+            assert!(
+                v.is_finite() && v >= 0.0,
+                "energy blew up/negative at step {step}: {v}"
+            );
         }
     }
 
@@ -105,7 +117,10 @@ fn couette_transition_regime_no_blowup_and_shows_slip() {
     // couple of wall-speeds).
     for (j, &u) in ux.iter().enumerate() {
         assert!(u.is_finite(), "u_x[{j}] non-finite");
-        assert!(u.abs() < 3.0 * u_wall, "u_x[{j}] = {u} exceeds sane bound (blowup?)");
+        assert!(
+            u.abs() < 3.0 * u_wall,
+            "u_x[{j}] = {u} exceeds sane bound (blowup?)"
+        );
     }
 
     // 2. Slip at the walls: the near-wall cell velocity should differ
@@ -135,6 +150,12 @@ fn couette_transition_regime_no_blowup_and_shows_slip() {
     // from south to north wall; a sign of physically sane shear-driven
     // flow, not noise-dominated garbage).
     let mid = ny / 2;
-    assert!(ux[mid] > ux[0] - 1e-9, "mid-channel velocity should exceed south near-wall velocity");
-    assert!(ux[ny - 1] > ux[mid] - 1e-9, "north near-wall velocity should exceed mid-channel velocity");
+    assert!(
+        ux[mid] > ux[0] - 1e-9,
+        "mid-channel velocity should exceed south near-wall velocity"
+    );
+    assert!(
+        ux[ny - 1] > ux[mid] - 1e-9,
+        "north near-wall velocity should exceed mid-channel velocity"
+    );
 }

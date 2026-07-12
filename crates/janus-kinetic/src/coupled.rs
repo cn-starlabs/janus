@@ -121,7 +121,10 @@ pub struct PaddedCounter {
 
 impl PaddedCounter {
     pub const fn new() -> Self {
-        Self { value: 0, _pad: [0; 56] }
+        Self {
+            value: 0,
+            _pad: [0; 56],
+        }
     }
 }
 
@@ -253,11 +256,23 @@ impl UgkwpSolver {
     fn refresh_kn(&mut self) {
         let ncells = self.wave.grid.ncells();
         for c in 0..ncells {
-            let t = self.wave.fields.temperature(c, self.wave.gas_r, crate::maxwellian::DOF);
-            self.mu_scratch[c] =
-                janus_core::units::vhs_viscosity(t, self.wave.mu_ref, self.wave.t_ref, self.wave.omega);
+            let t = self
+                .wave
+                .fields
+                .temperature(c, self.wave.gas_r, crate::maxwellian::DOF);
+            self.mu_scratch[c] = janus_core::units::vhs_viscosity(
+                t,
+                self.wave.mu_ref,
+                self.wave.t_ref,
+                self.wave.omega,
+            );
         }
-        update_kn_loc(&self.wave.grid, &mut self.wave.fields, &self.mu_scratch, self.wave.gas_r);
+        update_kn_loc(
+            &self.wave.grid,
+            &mut self.wave.fields,
+            &self.mu_scratch,
+            self.wave.gas_r,
+        );
     }
 
     /// One combined UGKWP step:
@@ -387,15 +402,7 @@ impl UgkwpSolver {
                 let f_cell = &mut d.f[c * nv..c * nv + nv];
                 let h_cell = &mut d.h[c * nv..c * nv + nv];
                 set_conservative_equilibrium_2d(
-                    f_cell,
-                    h_cell,
-                    &d.vgrid,
-                    &d.vw,
-                    r_gas,
-                    tgt_rho,
-                    tgt_mx,
-                    tgt_my,
-                    tgt_e,
+                    f_cell, h_cell, &d.vgrid, &d.vw, r_gas, tgt_rho, tgt_mx, tgt_my, tgt_e,
                 );
             }
             self.particles.clear();
@@ -419,7 +426,10 @@ impl UgkwpSolver {
         //      closed-form relaxation).
         for c in 0..ncells {
             let rho = self.wave.fields.rho[c];
-            let t = self.wave.fields.temperature(c, r_gas, crate::maxwellian::DOF);
+            let t = self
+                .wave
+                .fields
+                .temperature(c, r_gas, crate::maxwellian::DOF);
             self.p_free_scratch[c] = if rho > 0.0 {
                 let tau = self.wave.collision.relaxation_time(
                     rho,
@@ -464,7 +474,10 @@ impl UgkwpSolver {
                 // representation; `1 - p_free` remains in the wave field.
                 let rho_vol_particle = rho_vol_total * p_free;
                 let u = self.wave.fields.velocity(c);
-                let t = self.wave.fields.temperature(c, r_gas, crate::maxwellian::DOF);
+                let t = self
+                    .wave
+                    .fields
+                    .temperature(c, r_gas, crate::maxwellian::DOF);
                 let center = grid.center(i, j);
                 let half_extent = [grid.dx * 0.5, grid.dy * 0.5];
                 self.particles.sample_cell(
@@ -558,7 +571,12 @@ impl UgkwpSolver {
         }
         #[inline]
         fn is_absorbing(k: &BoundaryKind) -> bool {
-            matches!(k, BoundaryKind::VelocityInlet { .. } | BoundaryKind::PressureInlet { .. } | BoundaryKind::Outlet)
+            matches!(
+                k,
+                BoundaryKind::VelocityInlet { .. }
+                    | BoundaryKind::PressureInlet { .. }
+                    | BoundaryKind::Outlet
+            )
         }
 
         let west_periodic = is_periodic(&config_bcs.west);
@@ -580,8 +598,20 @@ impl UgkwpSolver {
                 if is_absorbing(&config_bcs.west) {
                     return false;
                 }
-                if let BoundaryKind::DiffuseWall { temperature, wall_velocity } = config_bcs.west {
-                    sample_wall_reemission(rng, [1.0, 0.0], wall_velocity, temperature, r_gas, v, zeta);
+                if let BoundaryKind::DiffuseWall {
+                    temperature,
+                    wall_velocity,
+                } = config_bcs.west
+                {
+                    sample_wall_reemission(
+                        rng,
+                        [1.0, 0.0],
+                        wall_velocity,
+                        temperature,
+                        r_gas,
+                        v,
+                        zeta,
+                    );
                 } else {
                     v[0] = -v[0];
                 }
@@ -590,8 +620,20 @@ impl UgkwpSolver {
                 if is_absorbing(&config_bcs.east) {
                     return false;
                 }
-                if let BoundaryKind::DiffuseWall { temperature, wall_velocity } = config_bcs.east {
-                    sample_wall_reemission(rng, [-1.0, 0.0], wall_velocity, temperature, r_gas, v, zeta);
+                if let BoundaryKind::DiffuseWall {
+                    temperature,
+                    wall_velocity,
+                } = config_bcs.east
+                {
+                    sample_wall_reemission(
+                        rng,
+                        [-1.0, 0.0],
+                        wall_velocity,
+                        temperature,
+                        r_gas,
+                        v,
+                        zeta,
+                    );
                 } else {
                     v[0] = -v[0];
                 }
@@ -609,8 +651,20 @@ impl UgkwpSolver {
                 if is_absorbing(&config_bcs.south) {
                     return false;
                 }
-                if let BoundaryKind::DiffuseWall { temperature, wall_velocity } = config_bcs.south {
-                    sample_wall_reemission(rng, [0.0, 1.0], wall_velocity, temperature, r_gas, v, zeta);
+                if let BoundaryKind::DiffuseWall {
+                    temperature,
+                    wall_velocity,
+                } = config_bcs.south
+                {
+                    sample_wall_reemission(
+                        rng,
+                        [0.0, 1.0],
+                        wall_velocity,
+                        temperature,
+                        r_gas,
+                        v,
+                        zeta,
+                    );
                 } else {
                     v[1] = -v[1];
                 }
@@ -619,8 +673,20 @@ impl UgkwpSolver {
                 if is_absorbing(&config_bcs.north) {
                     return false;
                 }
-                if let BoundaryKind::DiffuseWall { temperature, wall_velocity } = config_bcs.north {
-                    sample_wall_reemission(rng, [0.0, -1.0], wall_velocity, temperature, r_gas, v, zeta);
+                if let BoundaryKind::DiffuseWall {
+                    temperature,
+                    wall_velocity,
+                } = config_bcs.north
+                {
+                    sample_wall_reemission(
+                        rng,
+                        [0.0, -1.0],
+                        wall_velocity,
+                        temperature,
+                        r_gas,
+                        v,
+                        zeta,
+                    );
                 } else {
                     v[1] = -v[1];
                 }
@@ -644,7 +710,10 @@ impl UgkwpSolver {
         // allocation, ENGINEERING_SPEC.md §8).
         for c in 0..ncells {
             let rho = self.wave.fields.rho[c];
-            let t = self.wave.fields.temperature(c, r_gas, crate::maxwellian::DOF);
+            let t = self
+                .wave
+                .fields
+                .temperature(c, r_gas, crate::maxwellian::DOF);
             self.tau_scratch[c] = if rho > 0.0 {
                 self.wave.collision.relaxation_time(
                     rho,
@@ -785,7 +854,12 @@ fn sample_wall_reemission(
 /// (and hence the whole domain's) momentum/energy exactly — it only
 /// redistributes velocity *shape* toward equilibrium, never changes the
 /// summed moments of the particles it touches.
-fn redraw_collided_particles(particles: &mut Particles, indices: &[usize], rng: &mut Rng, r_gas: f64) {
+fn redraw_collided_particles(
+    particles: &mut Particles,
+    indices: &[usize],
+    rng: &mut Rng,
+    r_gas: f64,
+) {
     if indices.is_empty() {
         return;
     }
@@ -924,19 +998,27 @@ fn set_conservative_equilibrium_2d(
     let drho = tgt_rho - rho1;
     let dpx = tgt_momx - px1;
     let dpy = tgt_momy - py1;
-    let det = s1 * (sxx * syy - sxy * sxy) - sx * (sx * syy - sxy * sy) + sy * (sx * sxy - sxx * sy);
+    let det =
+        s1 * (sxx * syy - sxy * sxy) - sx * (sx * syy - sxy * sy) + sy * (sx * sxy - sxx * sy);
     let (a, b, cc) = if det.abs() > 1e-300 {
         let inv = 1.0 / det;
-        let da = drho * (sxx * syy - sxy * sxy) - sx * (dpx * syy - sxy * dpy) + sy * (dpx * sxy - sxx * dpy);
-        let db = s1 * (dpx * syy - sxy * dpy) - drho * (sx * syy - sxy * sy) + sy * (sx * dpy - dpx * sy);
-        let dc = s1 * (sxx * dpy - dpx * sxy) - sx * (sx * dpy - dpx * sy) + drho * (sx * sxy - sxx * sy);
+        let da = drho * (sxx * syy - sxy * sxy) - sx * (dpx * syy - sxy * dpy)
+            + sy * (dpx * sxy - sxx * dpy);
+        let db = s1 * (dpx * syy - sxy * dpy) - drho * (sx * syy - sxy * sy)
+            + sy * (sx * dpy - dpx * sy);
+        let dc = s1 * (sxx * dpy - dpx * sxy) - sx * (sx * dpy - dpx * sy)
+            + drho * (sx * sxy - sxx * sy);
         (da * inv, db * inv, dc * inv)
     } else {
         (0.0, 0.0, 0.0)
     };
     let e_from_g = 0.5 * (a * sqq + b * sxqq + cc * syqq);
     let de = tgt_e - e1 - e_from_g;
-    let f_h = if sh.abs() > 1e-300 { de / (0.5 * sh) } else { 0.0 };
+    let f_h = if sh.abs() > 1e-300 {
+        de / (0.5 * sh)
+    } else {
+        0.0
+    };
     for k in 0..nv {
         let v = vgrid[k];
         f[k] += f[k] * (a + b * v[0] + cc * v[1]);
@@ -1004,7 +1086,10 @@ mod tests {
         for step in 0..50 {
             solver.step(dt, &config.bcs);
             let now = solver.totals();
-            assert!(now.0.is_finite() && now.1.is_finite() && now.2.is_finite() && now.3.is_finite(), "non-finite at step {step}");
+            assert!(
+                now.0.is_finite() && now.1.is_finite() && now.2.is_finite() && now.3.is_finite(),
+                "non-finite at step {step}"
+            );
         }
         let after = solver.totals();
 
@@ -1071,7 +1156,10 @@ mod tests {
         let after = solver.totals();
 
         let tol_rel = 1e-9;
-        assert!((after.0 - before.0).abs() / before.0.abs().max(1e-300) < tol_rel, "mass drift");
+        assert!(
+            (after.0 - before.0).abs() / before.0.abs().max(1e-300) < tol_rel,
+            "mass drift"
+        );
         assert!(
             (after.1 - before.1).abs() / before.0.abs().max(1e-300) < 1e-5,
             "px drift: {} -> {}",
@@ -1133,7 +1221,8 @@ mod tests {
             fields.rho[0] = rho;
             fields.mom[0][0] = rho * u[0];
             fields.mom[1][0] = rho * u[1];
-            fields.energy[0] = 0.5 * rho * (u[0] * u[0] + u[1] * u[1]) + 0.5 * rho * dof * r_gas * t;
+            fields.energy[0] =
+                0.5 * rho * (u[0] * u[0] + u[1] * u[1]) + 0.5 * rho * dof * r_gas * t;
 
             let mut particles = Particles::with_capacity(PARTICLES_PER_CELL);
             let mut rng = Rng::new(99);
@@ -1242,7 +1331,10 @@ mod tests {
         let dt = solver.wave.cfl_dt(0.2);
         for _ in 0..10 {
             solver.step(dt, &config.bcs);
-            assert!(solver.particles.is_empty(), "Dugks kernel must never populate the particle layer");
+            assert!(
+                solver.particles.is_empty(),
+                "Dugks kernel must never populate the particle layer"
+            );
         }
     }
 
@@ -1274,7 +1366,11 @@ mod tests {
             particles.cell.push(0);
         }
 
-        let speeds_before: Vec<f64> = particles.vel.iter().map(|v| (v[0] * v[0] + v[1] * v[1]).sqrt()).collect();
+        let speeds_before: Vec<f64> = particles
+            .vel
+            .iter()
+            .map(|v| (v[0] * v[0] + v[1] * v[1]).sqrt())
+            .collect();
         let mass_before = particles.totals().0;
 
         let bcs = janus_core::config::BoundaryAssignment {
@@ -1311,9 +1407,16 @@ mod tests {
             &mut rng,
         );
 
-        assert_eq!(particles.len(), 4, "specular wall must not remove particles");
+        assert_eq!(
+            particles.len(),
+            4,
+            "specular wall must not remove particles"
+        );
         let mass_after = particles.totals().0;
-        assert!((mass_after - mass_before).abs() < 1e-12, "mass changed: {mass_before} -> {mass_after}");
+        assert!(
+            (mass_after - mass_before).abs() < 1e-12,
+            "mass changed: {mass_before} -> {mass_after}"
+        );
         for (i, v) in particles.vel.iter().enumerate() {
             let speed_after = (v[0] * v[0] + v[1] * v[1]).sqrt();
             assert!(
@@ -1325,7 +1428,10 @@ mod tests {
         }
         // All particles must now be back inside the domain.
         for p in &particles.pos {
-            assert!(p[0] >= ox && p[0] < ox + lx && p[1] >= oy && p[1] < oy + ly, "particle escaped: {p:?}");
+            assert!(
+                p[0] >= ox && p[0] < ox + lx && p[1] >= oy && p[1] < oy + ly,
+                "particle escaped: {p:?}"
+            );
         }
     }
 
@@ -1350,8 +1456,20 @@ mod tests {
         for _ in 0..200 {
             let mut v = [-5.0, 2.0]; // arbitrary incoming velocity (overwritten)
             let mut zeta = 0.0;
-            sample_wall_reemission(&mut rng, inward, wall_velocity, temperature, r_gas, &mut v, &mut zeta);
-            assert!(v[0] > 0.0, "re-emitted particle must move into the domain, got vx={}", v[0]);
+            sample_wall_reemission(
+                &mut rng,
+                inward,
+                wall_velocity,
+                temperature,
+                r_gas,
+                &mut v,
+                &mut zeta,
+            );
+            assert!(
+                v[0] > 0.0,
+                "re-emitted particle must move into the domain, got vx={}",
+                v[0]
+            );
             assert!(v[0].is_finite() && v[1].is_finite() && zeta.is_finite());
         }
     }

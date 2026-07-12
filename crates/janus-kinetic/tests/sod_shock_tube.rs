@@ -32,7 +32,15 @@ const GAMMA: f64 = 5.0 / 3.0;
 /// Numerical Methods for Fluid Dynamics", 3rd ed., ch. 4), specialized to
 /// the classic Sod left/right states with zero initial velocity. Returns
 /// (rho, u, p) at position `x` relative to the diaphragm, at time `t`.
-fn sod_exact(x: f64, t: f64, rho_l: f64, p_l: f64, rho_r: f64, p_r: f64, r_gas: f64) -> (f64, f64, f64) {
+fn sod_exact(
+    x: f64,
+    t: f64,
+    rho_l: f64,
+    p_l: f64,
+    rho_r: f64,
+    p_r: f64,
+    r_gas: f64,
+) -> (f64, f64, f64) {
     let gamma = GAMMA;
     let a_l = (gamma * p_l / rho_l).sqrt();
     let a_r = (gamma * p_r / rho_r).sqrt();
@@ -49,7 +57,8 @@ fn sod_exact(x: f64, t: f64, rho_l: f64, p_l: f64, rho_r: f64, p_r: f64, r_gas: 
             (fk, dfk)
         } else {
             // rarefaction
-            let fk = 2.0 * a_k / (gamma - 1.0) * ((p / p_k).powf((gamma - 1.0) / (2.0 * gamma)) - 1.0);
+            let fk =
+                2.0 * a_k / (gamma - 1.0) * ((p / p_k).powf((gamma - 1.0) / (2.0 * gamma)) - 1.0);
             let dfk = 1.0 / (rho_k * a_k) * (p / p_k).powf(-(gamma + 1.0) / (2.0 * gamma));
             (fk, dfk)
         }
@@ -80,11 +89,14 @@ fn sod_exact(x: f64, t: f64, rho_l: f64, p_l: f64, rho_r: f64, p_r: f64, r_gas: 
         if p_star > p_l {
             // left shock
             let q = p_star / p_l;
-            let s_l = 0.0 - a_l * (((gamma + 1.0) / (2.0 * gamma) * q + (gamma - 1.0) / (2.0 * gamma)).sqrt());
+            let s_l = 0.0
+                - a_l
+                    * (((gamma + 1.0) / (2.0 * gamma) * q + (gamma - 1.0) / (2.0 * gamma)).sqrt());
             if s < s_l {
                 (rho_l, 0.0, p_l)
             } else {
-                let rho_star_l = rho_l * (q + (gamma - 1.0) / (gamma + 1.0)) / (q * (gamma - 1.0) / (gamma + 1.0) + 1.0);
+                let rho_star_l = rho_l * (q + (gamma - 1.0) / (gamma + 1.0))
+                    / (q * (gamma - 1.0) / (gamma + 1.0) + 1.0);
                 (rho_star_l, u_star, p_star)
             }
         } else {
@@ -111,11 +123,14 @@ fn sod_exact(x: f64, t: f64, rho_l: f64, p_l: f64, rho_r: f64, p_r: f64, r_gas: 
         if p_star > p_r {
             // right shock
             let q = p_star / p_r;
-            let s_r = 0.0 + a_r * (((gamma + 1.0) / (2.0 * gamma) * q + (gamma - 1.0) / (2.0 * gamma)).sqrt());
+            let s_r = 0.0
+                + a_r
+                    * (((gamma + 1.0) / (2.0 * gamma) * q + (gamma - 1.0) / (2.0 * gamma)).sqrt());
             if s > s_r {
                 (rho_r, 0.0, p_r)
             } else {
-                let rho_star_r = rho_r * (q + (gamma - 1.0) / (gamma + 1.0)) / (q * (gamma - 1.0) / (gamma + 1.0) + 1.0);
+                let rho_star_r = rho_r * (q + (gamma - 1.0) / (gamma + 1.0))
+                    / (q * (gamma - 1.0) / (gamma + 1.0) + 1.0);
                 (rho_star_r, u_star, p_star)
             }
         } else {
@@ -238,7 +253,10 @@ fn sod_shock_tube_matches_exact_riemann_solution() {
         max_p_err = max_p_err.max((p_num - p_e).abs() / p_l);
         n_checked += 1;
     }
-    assert!(n_checked > 10, "sanity: expected many sample points to be checked");
+    assert!(
+        n_checked > 10,
+        "sanity: expected many sample points to be checked"
+    );
 
     // Loose tolerances: a first-order-upwind DUGKS/DVM solver smears shocks
     // and the contact discontinuity over several cells and will not match a
@@ -246,7 +264,16 @@ fn sod_shock_tube_matches_exact_riemann_solution() {
     // excluded above); away from those features 25% relative error is a
     // generous but meaningful bound for a first M1 implementation.
     let tol = 0.25;
-    assert!(max_rho_err < tol, "density max relative error {max_rho_err} exceeds {tol}");
-    assert!(max_u_err < tol, "velocity max relative error {max_u_err} exceeds {tol}");
-    assert!(max_p_err < tol, "pressure max relative error {max_p_err} exceeds {tol}");
+    assert!(
+        max_rho_err < tol,
+        "density max relative error {max_rho_err} exceeds {tol}"
+    );
+    assert!(
+        max_u_err < tol,
+        "velocity max relative error {max_u_err} exceeds {tol}"
+    );
+    assert!(
+        max_p_err < tol,
+        "pressure max relative error {max_p_err} exceeds {tol}"
+    );
 }

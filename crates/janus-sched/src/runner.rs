@@ -52,7 +52,10 @@ pub struct HaloBuffer {
 
 impl HaloBuffer {
     pub fn zeros(len: usize) -> Self {
-        Self { current: vec![0.0; len], next: vec![0.0; len] }
+        Self {
+            current: vec![0.0; len],
+            next: vec![0.0; len],
+        }
     }
 
     /// Swap `next` into `current` (O(1), no allocation) at the end of a
@@ -114,7 +117,9 @@ impl SchedRunner {
         let blocks = crate::block::partition_grid(&grid, blocks_x, blocks_y);
         let halos = blocks.iter().map(BlockHalo::for_block).collect();
         let accumulators = vec![PaddedAccumulator::new(); blocks.len()];
-        let result_slots = (0..blocks.len()).map(|_| Box::new(AtomicU64::new(0))).collect();
+        let result_slots = (0..blocks.len())
+            .map(|_| Box::new(AtomicU64::new(0)))
+            .collect();
         Self {
             grid,
             blocks,
