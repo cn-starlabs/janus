@@ -76,7 +76,7 @@ class JanusSceneProperties(bpy.types.PropertyGroup):
     extrude_z: bpy.props.FloatProperty(
         name="Z Thickness",
         description="Thin extrusion for 2D cases (meters)",
-        default=1.0e-5,
+        default=0.0,
         min=0.0,
         soft_max=1.0e-2,
     )
@@ -101,7 +101,7 @@ class JanusSceneProperties(bpy.types.PropertyGroup):
     sim_output_dir: bpy.props.StringProperty(
         name="Sim Output Dir",
         subtype="DIR_PATH",
-        default="//janus_live",
+        default="/home/pana/janus/output",
     )
 
     bc_role: bpy.props.EnumProperty(

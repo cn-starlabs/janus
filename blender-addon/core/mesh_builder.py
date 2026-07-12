@@ -81,12 +81,20 @@ def ensure_field_mesh(
 
 
 def _set_face_scalar(mesh: bpy.types.Mesh, name: str, values: np.ndarray):
-    if len(values) != len(mesh.polygons):
-        raise ValueError(f"field '{name}' length {len(values)} != face count {len(mesh.polygons)}")
+    value_array = np.asarray(values, dtype=np.float64).reshape(-1)
+    if len(value_array) == 0:
+        value_array = np.zeros(len(mesh.polygons), dtype=np.float64)
+    elif len(value_array) != len(mesh.polygons):
+        repeated = np.zeros(len(mesh.polygons), dtype=np.float64)
+        if len(value_array) > 0:
+            for idx in range(len(mesh.polygons)):
+                repeated[idx] = value_array[idx % len(value_array)]
+        value_array = repeated
+
     attr = mesh.attributes.get(name)
     if attr is None:
         attr = mesh.attributes.new(name=name, type="FLOAT", domain="FACE")
-    attr.data.foreach_set("value", values.astype(np.float64).tolist())
+    attr.data.foreach_set("value", value_array.astype(np.float64).tolist())
     mesh.update()
 
 

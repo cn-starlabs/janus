@@ -15,7 +15,7 @@ janus-kinetic = { path = "../janus-kinetic" }
 # to be inside the workspace root, only that the path resolves, so this is a
 # valid Cargo manifest even though `dtact` is not itself a member of this
 # [workspace]'s `members` list.
-dtact = { path = "../../../janus-dev/dtact" }
+dtact = { path = "../../../dtact" }
 
 # NOTE: janus-sched depends on janus-kinetic (the solver) and dtact
 # (scheduling), never the reverse (ENGINEERING_SPEC.md §3 hard rule: the

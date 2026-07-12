@@ -34,10 +34,6 @@ class JANUS_PT_visualization(Panel):
 
         obj = bpy.data.objects.get(props.mesh_object_name)
         if obj and obj.type == "MESH":
-            obj.show_wire = props.show_wireframe
-            obj.scale.z = 1.0
-            if props.extrude_z > 0.0:
-                obj.scale.z = 1.0
             mesh = obj.data
             layout.separator()
             layout.label(text=f"Faces: {len(mesh.polygons)}", icon="MESH_DATA")
