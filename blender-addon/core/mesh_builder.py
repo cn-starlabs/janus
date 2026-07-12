@@ -80,6 +80,21 @@ def ensure_field_mesh(
     return mesh
 
 
+def _normalize_scalar_values(values: np.ndarray) -> np.ndarray:
+    arr = np.asarray(values, dtype=np.float64).reshape(-1)
+    if arr.size == 0:
+        return np.zeros(0, dtype=np.float64)
+    finite = np.isfinite(arr)
+    if not np.any(finite):
+        return np.zeros(arr.shape, dtype=np.float64)
+    arr = np.where(finite, arr, 0.0)
+    vmin = np.min(arr)
+    vmax = np.max(arr)
+    if np.isclose(vmin, vmax):
+        return np.full(arr.shape, 0.5, dtype=np.float64)
+    return (arr - vmin) / (vmax - vmin)
+
+
 def _set_face_scalar(mesh: bpy.types.Mesh, name: str, values: np.ndarray):
     value_array = np.asarray(values, dtype=np.float64).reshape(-1)
     if len(value_array) == 0:
@@ -91,10 +106,11 @@ def _set_face_scalar(mesh: bpy.types.Mesh, name: str, values: np.ndarray):
                 repeated[idx] = value_array[idx % len(value_array)]
         value_array = repeated
 
+    normalized = _normalize_scalar_values(value_array)
     attr = mesh.attributes.get(name)
     if attr is None:
         attr = mesh.attributes.new(name=name, type="FLOAT", domain="FACE")
-    attr.data.foreach_set("value", value_array.astype(np.float64).tolist())
+    attr.data.foreach_set("value", normalized.astype(np.float64).tolist())
     mesh.update()
 
 
@@ -179,8 +195,8 @@ def ensure_preview_material(obj: bpy.types.Object, field_name: str = "rho"):
             ramp = nodes.new("ShaderNodeValToRGB")
             ramp.color_ramp.elements[0].position = 0.0
             ramp.color_ramp.elements[1].position = 1.0
-            ramp.color_ramp.elements[0].color = (0.05, 0.1, 0.5, 1.0)
-            ramp.color_ramp.elements[1].color = (0.9, 0.2, 0.1, 1.0)
+            ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.2, 1.0)
+            ramp.color_ramp.elements[1].color = (1.0, 0.2, 0.0, 1.0)
             links.new(attr.outputs["Fac"], ramp.inputs["Fac"])
             links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
         links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])

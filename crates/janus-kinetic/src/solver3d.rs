@@ -231,10 +231,20 @@ impl DugksSolver3D {
     }
 
     #[inline]
+    fn safe_temperature(&self, c: usize) -> f64 {
+        let t = self.fields.temperature(c, self.gas_r, DOF);
+        if t.is_finite() && t > 1e-6 {
+            t
+        } else {
+            self.t_ref.max(1e-6)
+        }
+    }
+
+    #[inline]
     fn cell_macro(&self, c: usize) -> (f64, [f64; 3], f64, [f64; 3]) {
         let rho = self.fields.rho[c];
         let u = self.fields.velocity(c);
-        let t = self.fields.temperature(c, self.gas_r, DOF);
+        let t = self.safe_temperature(c);
         let q = [
             self.fields.heat[0][c],
             self.fields.heat[1][c],
@@ -409,9 +419,10 @@ impl DugksSolver3D {
 
         for c in 0..ncells {
             let rho = self.fields.rho[c];
-            let t = self.fields.temperature(c, self.gas_r, DOF);
+            let rho_safe = if rho.is_finite() && rho > 0.0 { rho } else { 1e-6 };
+            let t = self.safe_temperature(c);
             self.tau_scratch[c] = self.collision.relaxation_time(
-                rho,
+                rho_safe,
                 t,
                 self.gas_r,
                 self.mu_ref,
