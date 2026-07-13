@@ -47,3 +47,4 @@ blender-addon/__pycache__/
 blender-addon/core/__pycache__/*
 blender-addon/operators/__pycache__/*
 blender-addon/panels/__pycache__/*
+tests/__pycache__/*

@@ -4,6 +4,7 @@ import bpy
 
 from .core import jvtk_reader
 from .core.mesh_builder import apply_field_to_mesh, ensure_field_mesh
+from .core.timeline_utils import frame_index_from_blender_frame, resolve_manifest_frame_path
 
 
 def _on_frame_change(scene, depsgraph):
@@ -15,17 +16,20 @@ def _on_frame_change(scene, depsgraph):
     except OSError:
         return
     blender_frame = scene.frame_current
-    frame_index = blender_frame - props.frame_offset
+    frame_index = frame_index_from_blender_frame(blender_frame, props.frame_offset)
     if frame_index < 0 or frame_index >= len(manifest["frames"]):
         return
     if frame_index == props.cached_frame_index:
         return
-    frame = manifest["frames"][frame_index]
-    data_root = props.data_root or str(bpy.path.abspath(props.manifest_path).parent)
-    jvtk_path = f"{data_root}/{frame['file']}"
     try:
+        jvtk_path = resolve_manifest_frame_path(
+            manifest,
+            props.manifest_path,
+            props.data_root,
+            frame_index,
+        )
         reader = jvtk_reader.JvtkReader.open(jvtk_path)
-    except OSError:
+    except (IndexError, OSError, ValueError):
         return
     mesh = ensure_field_mesh(scene, props.mesh_object_name, reader.header)
     apply_field_to_mesh(mesh, reader, props.active_field, props.show_regime_overlay)

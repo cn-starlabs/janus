@@ -4,6 +4,7 @@ import bpy
 from bpy.types import Operator
 
 from ..core import jvtk_reader
+from ..core.timeline_utils import resolve_manifest_frame_path
 
 
 class JANUS_OT_sync_timeline(Operator):
@@ -32,6 +33,9 @@ class JANUS_OT_sync_timeline(Operator):
         scene.frame_end = props.frame_offset + n_frames - 1
         scene.frame_current = props.frame_offset
         props.cached_frame_index = -1
+
+        if n_frames > 1:
+            scene.frame_step = 1
 
         self.report({"INFO"}, f"Timeline set to frames {scene.frame_start}–{scene.frame_end}")
         return {"FINISHED"}

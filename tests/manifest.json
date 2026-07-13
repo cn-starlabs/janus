@@ -1,0 +1,81 @@
+{
+  "case_name": "live",
+  "write_every": 50,
+  "dims": [
+    20,
+    20,
+    1
+  ],
+  "spacing": [
+    5e-05,
+    5e-05,
+    1.0
+  ],
+  "origin": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "frames": [
+    {
+      "index": 0,
+      "step": 0,
+      "time": 0.0,
+      "file": "live_0000.jvtk"
+    },
+    {
+      "index": 1,
+      "step": 50,
+      "time": 3.9283710651292154e-07,
+      "file": "live_0001.jvtk"
+    },
+    {
+      "index": 2,
+      "step": 100,
+      "time": 7.85674213025845e-07,
+      "file": "live_0002.jvtk"
+    },
+    {
+      "index": 3,
+      "step": 150,
+      "time": 1.178511319538766e-06,
+      "file": "live_0003.jvtk"
+    },
+    {
+      "index": 4,
+      "step": 200,
+      "time": 1.5713484260516847e-06,
+      "file": "live_0004.jvtk"
+    },
+    {
+      "index": 5,
+      "step": 250,
+      "time": 1.9641855325646036e-06,
+      "file": "live_0005.jvtk"
+    },
+    {
+      "index": 6,
+      "step": 300,
+      "time": 2.3570226390775223e-06,
+      "file": "live_0006.jvtk"
+    },
+    {
+      "index": 7,
+      "step": 350,
+      "time": 2.749859745590441e-06,
+      "file": "live_0007.jvtk"
+    },
+    {
+      "index": 8,
+      "step": 400,
+      "time": 3.1426968521033596e-06,
+      "file": "live_0008.jvtk"
+    },
+    {
+      "index": 9,
+      "step": 450,
+      "time": 3.5355339586162783e-06,
+      "file": "live_0009.jvtk"
+    }
+  ]
+}

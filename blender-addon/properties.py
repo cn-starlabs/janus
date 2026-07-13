@@ -86,6 +86,23 @@ class JanusSceneProperties(bpy.types.PropertyGroup):
         default=False,
     )
     sim_running: bpy.props.BoolProperty(name="Simulation Running", default=False)
+    sim_status: bpy.props.StringProperty(
+        name="Status",
+        description="Current simulation status and diagnostics",
+        default="Idle",
+    )
+    sim_current_time: bpy.props.FloatProperty(
+        name="Sim Time",
+        description="Current simulation time (seconds)",
+        default=0.0,
+        options={"HIDDEN"},
+    )
+    sim_current_step: bpy.props.IntProperty(
+        name="Step",
+        description="Current simulation step count",
+        default=0,
+        options={"HIDDEN"},
+    )
     sim_steps_per_tick: bpy.props.IntProperty(
         name="Steps / Tick",
         default=5,
@@ -95,7 +112,7 @@ class JanusSceneProperties(bpy.types.PropertyGroup):
     sim_cfl: bpy.props.FloatProperty(name="CFL", default=0.4, min=0.01, max=0.95)
     sim_scheme: bpy.props.EnumProperty(
         name="Integrator",
-        items=[("0", "Euler", ""), ("1", "RK2", "")],
+        items=[("0", "Euler", ""), ("1", "RK2", ""), ("2", "RK4", "")],
         default="0",
     )
     sim_output_dir: bpy.props.StringProperty(

@@ -32,6 +32,12 @@ class JANUS_PT_visualization(Panel):
         col.prop(props, "active_field")
         col.prop(props, "show_regime_overlay")
 
+        layout.separator()
+        col = layout.column(align=True)
+        col.label(text="Visualization Materials", icon="SHADING_RENDERED")
+        col.operator("janus.setup_visualization", text="Setup Materials", icon="MATERIAL")
+        col.operator("janus.update_field_material", text="Update Field Display", icon="MATSHADERBALL")
+
         obj = bpy.data.objects.get(props.mesh_object_name)
         if obj and obj.type == "MESH":
             mesh = obj.data

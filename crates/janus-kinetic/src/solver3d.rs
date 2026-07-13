@@ -99,10 +99,11 @@ pub struct DugksSolver3D {
     tau_scratch: Vec<f64>,
     face_flux: Vec<f64>, // len = nv, reused per face
     ghost_buf: Vec<f64>, // len = nv, reused per boundary face
-    // RK2-only preallocated scratch (see `crate::solver::DugksSolver`'s
-    // identical fields for the shared rationale: zero heap allocation in the
-    // `step_rk2` hot path).
+    // RK2/RK4 preallocated scratch (zero heap allocation in the step path).
     rk2_stage_f: Vec<f64>, // len = ncells * nv
+    rk4_stage1_f: Vec<f64>, // len = ncells * nv, for RK4
+    rk4_stage2_f: Vec<f64>, // len = ncells * nv, for RK4
+    rk4_stage3_f: Vec<f64>, // len = ncells * nv, for RK4
     // Pre-floor conservation target per cell: [rho, px, py, pz, e, qx, qy, qz]
     // captured after transport but BEFORE the positivity floor, so the
     // conservative relaxation correction restores the transport-conserved
@@ -143,6 +144,9 @@ impl DugksSolver3D {
             face_flux: vec![0.0; nv],
             ghost_buf: vec![0.0; nv],
             rk2_stage_f: vec![0.0; ncells * nv],
+            rk4_stage1_f: vec![0.0; ncells * nv],
+            rk4_stage2_f: vec![0.0; ncells * nv],
+            rk4_stage3_f: vec![0.0; ncells * nv],
             relax_tgt: vec![[0.0; 8]; ncells],
         }
     }
@@ -377,11 +381,13 @@ impl DugksSolver3D {
 
     /// Dispatch to `self.scheme`: `Euler` calls `step` (unchanged); `Rk2`
     /// calls `step_rk2` (Shu-Osher SSP-RK2, operator-split transport/
-    /// collision) — mirrors `DugksSolver::step_scheme` (2D) exactly.
+    /// collision); `Rk4` calls `step_rk4` (classical 4-stage RK, operator-split)
+    /// — mirrors `DugksSolver::step_scheme` (2D) exactly.
     pub fn step_scheme(&mut self, dt: f64, config_bcs: &BoundaryAssignment3D) {
         match self.scheme {
             crate::solver::TimeScheme::Euler => self.step(dt, config_bcs),
             crate::solver::TimeScheme::Rk2 => self.step_rk2(dt, config_bcs),
+            crate::solver::TimeScheme::Rk4 => self.step_rk4(dt, config_bcs),
         }
     }
 
@@ -402,6 +408,59 @@ impl DugksSolver3D {
         self.step(dt, config_bcs); // self.dist now holds u2 = Euler_step(u1, dt)
         for i in 0..n {
             self.dist.f[i] = 0.5 * self.rk2_stage_f[i] + 0.5 * self.dist.f[i];
+        }
+        self.update_moments();
+    }
+
+    /// Classical 4-stage Runge-Kutta (RK4) time integration, applied via
+    /// operator splitting (see `solver::TimeScheme` docs). This 3D version
+    /// mirrors `DugksSolver::step_rk4` (2D) exactly, adapted to use only f
+    /// (no separate h collision distribution).
+    fn step_rk4(&mut self, dt: f64, config_bcs: &BoundaryAssignment3D) {
+        let n = self.dist.f.len();
+
+        debug_assert_eq!(n, self.rk4_stage1_f.len());
+        debug_assert_eq!(n, self.rk4_stage2_f.len());
+        debug_assert_eq!(n, self.rk4_stage3_f.len());
+
+        // Save u^n for blending and intermediate stages.
+        let u_n_f = self.dist.f.clone();
+
+        // Stage 1: k1 = L(u^n, dt)
+        self.step(dt, config_bcs);
+        self.rk4_stage1_f.copy_from_slice(&self.dist.f);
+
+        // Stage 2: k2 = L(u^n + 0.5*dt*k1, dt)
+        for i in 0..n {
+            self.dist.f[i] = 0.5 * u_n_f[i] + 0.5 * self.rk4_stage1_f[i];
+        }
+        self.update_moments();
+        self.step(dt, config_bcs);
+        self.rk4_stage2_f.copy_from_slice(&self.dist.f);
+
+        // Stage 3: k3 = L(u^n + 0.5*dt*k2, dt)
+        for i in 0..n {
+            self.dist.f[i] = 0.5 * u_n_f[i] + 0.5 * self.rk4_stage2_f[i];
+        }
+        self.update_moments();
+        self.step(dt, config_bcs);
+        self.rk4_stage3_f.copy_from_slice(&self.dist.f);
+
+        // Stage 4: k4 = L(u^n + dt*k3, dt)
+        for i in 0..n {
+            self.dist.f[i] = u_n_f[i] + (self.rk4_stage3_f[i] - u_n_f[i]);
+        }
+        self.update_moments();
+        self.step(dt, config_bcs);
+
+        // Final blend: u^{n+1} = u^n + (1/6)*(k1 + 2*k2 + 2*k3 + k4)
+        // = (1/6)*u_n + (1/6)*stage1 + (1/3)*stage2 + (1/3)*stage3 + (1/6)*dist
+        for i in 0..n {
+            self.dist.f[i] = (1.0/6.0) * u_n_f[i]
+                + (1.0/6.0) * self.rk4_stage1_f[i]
+                + (1.0/3.0) * self.rk4_stage2_f[i]
+                + (1.0/3.0) * self.rk4_stage3_f[i]
+                + (1.0/6.0) * self.dist.f[i];
         }
         self.update_moments();
     }

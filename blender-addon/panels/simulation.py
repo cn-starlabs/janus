@@ -37,6 +37,16 @@ class JANUS_PT_simulation(Panel):
 
         layout.separator()
         col = layout.column(align=True)
+        col.label(text="Live Status", icon="PLAY")
+        col.label(text=props.sim_status, icon="INFO")
+        if props.sim_running:
+            row = col.row()
+            row.label(text=f"Time: {props.sim_current_time:.3e} s")
+            row = col.row()
+            row.label(text=f"Step: {props.sim_current_step}")
+
+        layout.separator()
+        col = layout.column(align=True)
         col.label(text="Setup", icon="MESH_GRID")
         col.operator("janus.build_ffi", icon="SETTINGS")
         col.operator("janus.build_grid", icon="MESH_PLANE")

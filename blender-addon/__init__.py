@@ -12,7 +12,7 @@ import bpy
 
 from . import handlers
 from .operators import boundaries as boundary_ops
-from .operators import import_export, setup, simulate, timeline
+from .operators import import_export, setup, simulate, timeline, visualization as viz_ops
 from .panels import boundaries, simulation, visualization
 from .properties import JanusAddonPreferences, JanusSceneProperties
 
@@ -29,6 +29,8 @@ CLASSES = (
     simulate.JANUS_OT_simulate,
     simulate.JANUS_OT_simulate_stop,
     timeline.JANUS_OT_sync_timeline,
+    viz_ops.JANUS_OT_setup_visualization,
+    viz_ops.JANUS_OT_update_field_material,
     simulation.JANUS_PT_simulation,
     boundaries.JANUS_PT_boundaries,
     visualization.JANUS_PT_visualization,

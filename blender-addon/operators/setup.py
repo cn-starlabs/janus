@@ -31,6 +31,23 @@ def _scene_grid_defaults(scene: bpy.types.Scene) -> dict:
     return grid
 
 
+def _scene_domain_bounds(scene: bpy.types.Scene) -> tuple[float, float, float, float, float, float]:
+    props = scene.janus
+    ref_obj = bpy.data.objects.get(props.mesh_object_name)
+    if ref_obj is not None and getattr(ref_obj, "bound_box", None):
+        bounds = ref_obj.bound_box
+        if bounds:
+            return (
+                min(v[0] for v in bounds),
+                max(v[0] for v in bounds),
+                min(v[1] for v in bounds),
+                max(v[1] for v in bounds),
+                min(v[2] for v in bounds),
+                max(v[2] for v in bounds),
+            )
+    return (0.0, 1.0, 0.0, 1.0, 0.0, 1.0)
+
+
 def _build_case_payload(scene: bpy.types.Scene) -> dict:
     props = scene.janus
     default_case = {
@@ -88,6 +105,18 @@ def _build_case_payload(scene: bpy.types.Scene) -> dict:
             "bcs": bcs,
             "gas": default_case.get("config", {}).get("gas", default_case.get("gas", {})),
         },
+        "initial": {
+            "rho": 1.0,
+            "temperature": 300.0,
+            "velocity": [0.0, 0.0],
+        },
+        "velocity_grid": {
+            "v_max": 1800.0,
+            "n_per_dim": 25,
+        },
+        "time_scheme": {
+            "scheme": ("euler", "rk2", "rk4")[int(props.sim_scheme)]
+        },
         "scene": {
             "mesh_object": props.mesh_object_name,
             "boundary_tags": [
@@ -95,6 +124,9 @@ def _build_case_payload(scene: bpy.types.Scene) -> dict:
                     "object": obj.name,
                     "role": obj.get("janus_boundary_role", ""),
                     "kind": obj.get("janus_boundary_kind", ""),
+                    "temperature": obj.get("janus_boundary_temperature", props.bc_temperature),
+                    "velocity": obj.get("janus_boundary_velocity", [props.bc_wall_velocity_x, props.bc_wall_velocity_y]),
+                    "domain_bounds": list(_scene_domain_bounds(scene)),
                 }
                 for obj in bpy.data.objects
                 if "janus_boundary_role" in obj

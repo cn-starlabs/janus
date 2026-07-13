@@ -4,7 +4,7 @@
 //! from multiple threads. Blender's addon runs the solver on a worker thread and
 //! only reads field pointers on the main thread between steps.
 
-use janus_core::config::CaseConfig;
+use janus_core::config::{BoundaryKind, CaseConfig, Edge};
 use janus_core::distribution::Distribution;
 use janus_io::writer::{FieldData, NamedField};
 use janus_io::JvtkWriter;
@@ -68,6 +68,46 @@ struct SolverCreateJson {
     initial: InitialConditionJson,
     #[serde(default)]
     velocity_grid: VelocityGridJson,
+    #[serde(default)]
+    scene: Option<SceneJson>,
+    #[serde(default)]
+    time_scheme: TimeSchemeJson,
+}
+
+#[derive(Serialize, Deserialize, Default, Clone)]
+struct SceneJson {
+    #[serde(default)]
+    boundary_tags: Vec<BoundaryTagJson>,
+}
+
+/// Time integration scheme selector (passed from Blender configuration).
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+struct TimeSchemeJson {
+    /// One of: "euler" (default), "rk2", "rk4".
+    #[serde(default)]
+    scheme: String,
+}
+
+impl TimeSchemeJson {
+    fn to_time_scheme(&self) -> TimeScheme {
+        match self.scheme.to_lowercase().as_str() {
+            "rk2" => TimeScheme::Rk2,
+            "rk4" => TimeScheme::Rk4,
+            _ => TimeScheme::Euler, // default
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Default, Clone)]
+struct BoundaryTagJson {
+    #[serde(default)]
+    role: String,
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    temperature: Option<f64>,
+    #[serde(default)]
+    velocity: Option<[f64; 2]>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -111,14 +151,17 @@ fn default_nv() -> usize {
 }
 
 fn build_solver(json: &SolverCreateJson) -> Result<SolverHandle, String> {
+    let mut config = json.config.clone();
+    apply_scene_boundary_tags(&mut config, json.scene.as_ref());
+
     let (vgrid, vw) =
         VelocityGrid2D::simpson(json.velocity_grid.v_max, json.velocity_grid.n_per_dim);
-    let ncells = json.config.grid.ncells();
+    let ncells = config.grid.ncells();
     let mut dist = Distribution::zeros(ncells, vgrid, vw);
     let rho0 = json.initial.rho;
     let t0 = json.initial.temperature;
     let u0 = json.initial.velocity;
-    let r_gas = json.config.gas.r_gas;
+    let r_gas = config.gas.r_gas;
     for c in 0..ncells {
         for (k, v) in dist.vgrid.iter().enumerate() {
             let (g, h) = gh_equilibrium(rho0, u0, t0, r_gas, *v);
@@ -126,14 +169,62 @@ fn build_solver(json: &SolverCreateJson) -> Result<SolverHandle, String> {
             dist.h[c * dist.nv + k] = h;
         }
     }
-    let mut solver = DugksSolver::new(&json.config, dist);
+    let mut solver = DugksSolver::new(&config, dist);
     solver.update_moments();
+    // Apply selected time scheme (Euler, RK2, RK4)
+    solver.scheme = json.time_scheme.to_time_scheme();
     let mu_scratch = vec![0.0; ncells];
     Ok(SolverHandle {
         solver,
-        config: json.config.clone(),
+        config,
         mu_scratch,
     })
+}
+
+fn apply_scene_boundary_tags(config: &mut CaseConfig, scene: Option<&SceneJson>) {
+    let Some(scene) = scene else {
+        return;
+    };
+
+    for tag in &scene.boundary_tags {
+        let Some(edge) = (match tag.role.as_str() {
+            "west" => Some(Edge::West),
+            "east" => Some(Edge::East),
+            "south" => Some(Edge::South),
+            "north" => Some(Edge::North),
+            _ => None,
+        }) else {
+            continue;
+        };
+
+        let kind = match tag.kind.trim().to_lowercase().as_str() {
+            "diffusewall" | "wall" => BoundaryKind::DiffuseWall {
+                temperature: tag.temperature.unwrap_or(300.0),
+                wall_velocity: tag.velocity.unwrap_or([0.0, 0.0]),
+            },
+            "specularwall" => BoundaryKind::SpecularWall,
+            "velocityinlet" => BoundaryKind::VelocityInlet {
+                velocity: tag.velocity.unwrap_or([0.0, 0.0]),
+                density: 1.0,
+                temperature: tag.temperature.unwrap_or(300.0),
+            },
+            "pressureinlet" => BoundaryKind::PressureInlet {
+                pressure: 1.0,
+                temperature: tag.temperature.unwrap_or(300.0),
+            },
+            "outlet" => BoundaryKind::Outlet,
+            "symmetry" => BoundaryKind::Symmetry,
+            "periodic" => BoundaryKind::Periodic,
+            _ => continue,
+        };
+
+        match edge {
+            Edge::West => config.bcs.west = kind,
+            Edge::East => config.bcs.east = kind,
+            Edge::South => config.bcs.south = kind,
+            Edge::North => config.bcs.north = kind,
+        }
+    }
 }
 
 fn update_kn_and_mu(handle: &mut SolverHandle) {
@@ -501,10 +592,65 @@ pub extern "C" fn janus_default_case_json() -> *const c_char {
                 config: CaseConfig { grid, bcs, gas },
                 initial: InitialConditionJson::default(),
                 velocity_grid: VelocityGridJson::default(),
+                scene: None,
+                time_scheme: TimeSchemeJson::default(),
             };
             let json = serde_json::to_string_pretty(&cfg).expect("default case serializes");
             *borrow = Some(CString::new(json).expect("no interior nul in json"));
         }
         borrow.as_ref().unwrap().as_ptr()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scene_boundary_tags_override_edge_config() {
+        let payload = r#"{
+            "config": {
+                "grid": {"nx": 2, "ny": 2, "dx": 0.5, "dy": 0.5, "origin": [0.0, 0.0]},
+                "bcs": {
+                    "west": "Periodic",
+                    "east": "Periodic",
+                    "south": "Periodic",
+                    "north": "Periodic"
+                },
+                "gas": {
+                    "r_gas": 208.13,
+                    "molar_mass": 0.039948,
+                    "vhs_omega": 0.81,
+                    "mu_ref": 2.117e-5,
+                    "t_ref": 273.15,
+                    "prandtl": 0.6666666666666666
+                }
+            },
+            "scene": {
+                "boundary_tags": [
+                    {
+                        "role": "north",
+                        "kind": "DiffuseWall",
+                        "temperature": 400.0,
+                        "velocity": [2.0, 0.0]
+                    }
+                ]
+            }
+        }"#;
+
+        let parsed: SolverCreateJson = serde_json::from_str(payload).unwrap();
+        let mut config = parsed.config.clone();
+        apply_scene_boundary_tags(&mut config, parsed.scene.as_ref());
+
+        match config.bcs.north {
+            janus_core::config::BoundaryKind::DiffuseWall {
+                temperature,
+                wall_velocity,
+            } => {
+                assert!((temperature - 400.0).abs() < 1e-12);
+                assert_eq!(wall_velocity, [2.0, 0.0]);
+            }
+            other => panic!("expected diffuse wall, got {other:?}"),
+        }
+    }
 }

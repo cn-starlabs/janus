@@ -10,6 +10,7 @@ import bpy
 from bpy.types import Operator
 
 from ..core.jvtk_reader import JvtkHeader
+from ..operators.setup import _build_case_payload
 from ..core.mesh_builder import (
     apply_live_field_from_solver,
     ensure_field_mesh,
@@ -29,6 +30,7 @@ class _SimRuntime:
     manifest_frames: list[dict] = []
     write_every: int = 50
     output_dir: str = ""
+    last_field_displayed: str = ""
 
 
 def _stop_runtime():
@@ -41,6 +43,7 @@ def _stop_runtime():
     rt.sim_time = 0.0
     rt.frame_index = 0
     rt.manifest_frames = []
+    rt.last_field_displayed = ""
 
 
 def _write_manifest(output_dir: str, grid_info, write_every: int):
@@ -103,11 +106,16 @@ def _sim_timer():
         if obj:
             ensure_preview_material(obj, props.active_field)
 
+        props.sim_current_time = rt.sim_time
+        props.sim_current_step = rt.step_count
+        props.sim_status = f"Running ({props.active_field})"
+
         for area in bpy.context.screen.areas:
             if area.type == "VIEW_3D":
                 area.tag_redraw()
     except RuntimeError as exc:
         props.sim_running = False
+        props.sim_status = f"Error: {str(exc)[:60]}"
         _stop_runtime()
         print(f"Janus simulation error: {exc}")
         return None
@@ -130,8 +138,10 @@ class JANUS_OT_simulate(Operator):
             from ..core.core_client import get_library
 
             lib = get_library()
-        except FileNotFoundError as exc:
-            self.report({"ERROR"}, str(exc))
+        except (FileNotFoundError, RuntimeError) as exc:
+            msg = str(exc)[:100]
+            self.report({"ERROR"}, msg)
+            props.sim_status = f"Setup failed: {msg}"
             return {"CANCELLED"}
 
         _stop_runtime()
@@ -142,9 +152,8 @@ class JANUS_OT_simulate(Operator):
         os.makedirs(rt.output_dir, exist_ok=True)
 
         try:
-            case = json.loads(lib.default_case_json())
-            rt.handle = lib.create_solver(case)
-            lib.set_scheme(rt.handle, int(props.sim_scheme))
+            payload = _build_case_payload(context.scene)
+            rt.handle = lib.create_solver(payload)
             rt.dt = lib.cfl_dt(rt.handle, props.sim_cfl)
             if rt.dt <= 0.0:
                 raise RuntimeError("CFL timestep is zero — check grid and CFL setting")
