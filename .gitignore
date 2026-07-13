@@ -48,3 +48,5 @@ blender-addon/core/__pycache__/*
 blender-addon/operators/__pycache__/*
 blender-addon/panels/__pycache__/*
 tests/__pycache__/*
+blender-addon/tests/__pycache__/*
+WORKFLOW_VALIDATION_PLAN.md
