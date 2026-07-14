@@ -1,7 +1,6 @@
 """High-performance material node and geometry node setup for field visualization."""
 
 import bpy
-from mathutils import Color
 
 
 def setup_field_material(obj: bpy.types.Object, field_name: str = "rho") -> bpy.types.Material:
@@ -47,11 +46,11 @@ def setup_field_material(obj: bpy.types.Object, field_name: str = "rho") -> bpy.
 
     # Stop 0 (value=0.0): dark blue
     ramp.elements[0].position = 0.0
-    ramp.elements[0].color = Color((0.0, 0.2, 0.8, 1.0))
+    ramp.elements[0].color = (0.0, 0.2, 0.8, 1.0)
 
     # Stop 1 (value=1.0): bright yellow transitioning to red
     ramp.elements[1].position = 1.0
-    ramp.elements[1].color = Color((1.0, 0.3, 0.0, 1.0))
+    ramp.elements[1].color = (1.0, 0.3, 0.0, 1.0)
 
     # Principled BSDF (modern physically-based shader)
     bsdf_node = nodes.new(type="ShaderNodeBsdfPrincipled")
@@ -152,21 +151,21 @@ def setup_regime_overlay_material(obj: bpy.types.Object) -> bpy.types.Material:
     # Add stops for flow regimes (normalized to [0, 1] via log scale above)
     # log10(0.01) = -2 → (−2 + 3) / 5 = 0.2 (blue/green boundary)
     e0 = ramp.elements.new(0.0)
-    e0.color = Color((0.0, 0.2, 0.9, 1.0))  # Continuum: dark blue
+    e0.color = (0.0, 0.2, 0.9, 1.0)  # Continuum: dark blue
 
     e1 = ramp.elements.new(0.2)
-    e1.color = Color((0.0, 0.8, 0.2, 1.0))  # Slip: green
+    e1.color = (0.0, 0.8, 0.2, 1.0)  # Slip: green
 
     # log10(0.1) = -1 → (−1 + 3) / 5 = 0.4 (green/yellow boundary)
     e2 = ramp.elements.new(0.4)
-    e2.color = Color((1.0, 1.0, 0.0, 1.0))  # Transition: yellow
+    e2.color = (1.0, 1.0, 0.0, 1.0)  # Transition: yellow
 
     # log10(10) = 1 → (1 + 3) / 5 = 0.8 (yellow/red boundary)
     e3 = ramp.elements.new(0.8)
-    e3.color = Color((1.0, 0.0, 0.0, 1.0))  # Free molecular: red
+    e3.color = (1.0, 0.0, 0.0, 1.0)  # Free molecular: red
 
     e4 = ramp.elements.new(1.0)
-    e4.color = Color((0.6, 0.0, 0.2, 1.0))  # Far free molecular: dark red
+    e4.color = (0.6, 0.0, 0.2, 1.0)  # Far free molecular: dark red
 
     # Principled BSDF
     bsdf_node = nodes.new(type="ShaderNodeBsdfPrincipled")

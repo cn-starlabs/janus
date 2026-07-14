@@ -55,8 +55,8 @@ def _build_case_payload(scene: bpy.types.Scene) -> dict:
         "bcs": {
             "west": "Periodic",
             "east": "Periodic",
-            "south": "DiffuseWall",
-            "north": "DiffuseWall",
+            "south": {"DiffuseWall": {"temperature": 300.0, "wall_velocity": [0.0, 0.0]}},
+            "north": {"DiffuseWall": {"temperature": 300.0, "wall_velocity": [0.0, 0.0]}},
         },
         "gas": {"r_gas": 208.13, "molar_mass": 0.039948, "vhs_omega": 0.81, "mu_ref": 2.117e-5, "t_ref": 273.15, "prandtl": 2.0 / 3.0},
     }
@@ -71,39 +71,52 @@ def _build_case_payload(scene: bpy.types.Scene) -> dict:
         except (FileNotFoundError, RuntimeError):
             pass
 
-    bcs = default_case.get("bcs", {})
+    # Extract bcs from either flat format {"bcs": {...}} or FFI nested format
+    # {"config": {"bcs": {...}}}.  `lib.default_case_json()` returns the nested
+    # form; the plain Python default above uses the flat form.  Both must be
+    # handled so we never send an empty or incomplete bcs object to the solver
+    # (serde will reject it with "missing field `west`").
+    bcs: dict = (
+        default_case.get("bcs")
+        or default_case.get("config", {}).get("bcs")
+        or {}
+    )
 
+    # Guarantee every required edge key is present. serde's BoundaryAssignment
+    # has no #[serde(default)] on its fields so every key is mandatory.
+    _EDGE_DEFAULT = {
+        "west": "Periodic",
+        "east": "Periodic",
+        "south": "Periodic",
+        "north": "Periodic",
+    }
+    for edge in ("west", "east", "south", "north"):
+        if edge not in bcs:
+            bcs[edge] = _EDGE_DEFAULT[edge]
+
+    # Override with any boundary objects the user tagged in the scene.
     for obj in bpy.data.objects:
         if "janus_boundary_role" not in obj:
             continue
         role = str(obj["janus_boundary_role"])
         if role in {"west", "east", "south", "north"}:
-            if role == "west":
-                kind = "DiffuseWall"
-                temperature = float(obj.get("janus_boundary_temperature", props.bc_temperature))
-                velocity = list(obj.get("janus_boundary_velocity", [props.bc_wall_velocity_x, props.bc_wall_velocity_y]))
-                bcs["west"] = {"DiffuseWall": {"temperature": temperature, "wall_velocity": velocity}}
-            elif role == "east":
-                kind = "DiffuseWall"
-                temperature = float(obj.get("janus_boundary_temperature", props.bc_temperature))
-                velocity = list(obj.get("janus_boundary_velocity", [props.bc_wall_velocity_x, props.bc_wall_velocity_y]))
-                bcs["east"] = {"DiffuseWall": {"temperature": temperature, "wall_velocity": velocity}}
-            elif role == "south":
-                kind = "DiffuseWall"
-                temperature = float(obj.get("janus_boundary_temperature", props.bc_temperature))
-                velocity = list(obj.get("janus_boundary_velocity", [props.bc_wall_velocity_x, props.bc_wall_velocity_y]))
-                bcs["south"] = {"DiffuseWall": {"temperature": temperature, "wall_velocity": velocity}}
-            elif role == "north":
-                kind = "DiffuseWall"
-                temperature = float(obj.get("janus_boundary_temperature", props.bc_temperature))
-                velocity = list(obj.get("janus_boundary_velocity", [props.bc_wall_velocity_x, props.bc_wall_velocity_y]))
-                bcs["north"] = {"DiffuseWall": {"temperature": temperature, "wall_velocity": velocity}}
+            temperature = float(obj.get("janus_boundary_temperature", props.bc_temperature))
+            velocity = list(obj.get("janus_boundary_velocity", [props.bc_wall_velocity_x, props.bc_wall_velocity_y]))
+            bcs[role] = {"DiffuseWall": {"temperature": temperature, "wall_velocity": velocity}}
+
+    # Extract grid and gas — handle both flat and nested FFI formats.
+    cfg = default_case.get("config", {})
+    grid = cfg.get("grid") or default_case.get("grid") or _scene_grid_defaults(scene)
+    gas = cfg.get("gas") or default_case.get("gas") or {
+        "r_gas": 208.13, "molar_mass": 0.039948, "vhs_omega": 0.81,
+        "mu_ref": 2.117e-5, "t_ref": 273.15, "prandtl": 2.0 / 3.0,
+    }
 
     payload = {
         "config": {
-            "grid": default_case.get("config", {}).get("grid", default_case.get("grid", {})),
+            "grid": grid,
             "bcs": bcs,
-            "gas": default_case.get("config", {}).get("gas", default_case.get("gas", {})),
+            "gas": gas,
         },
         "initial": {
             "rho": 1.0,

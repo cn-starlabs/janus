@@ -29,8 +29,9 @@ class JANUS_OT_import_manifest(Operator):
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
 
+        from pathlib import Path
         props.manifest_path = manifest_path
-        props.data_root = str(bpy.path.abspath(manifest_path).parent)
+        props.data_root = str(Path(bpy.path.abspath(manifest_path)).parent)
         props.cached_frame_index = -1
 
         if manifest.get("frames"):

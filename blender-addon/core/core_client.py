@@ -125,6 +125,7 @@ class JanusLibrary:
         return float(self._lib.janus_solver_cfl_dt(handle, cfl))
 
     def set_scheme(self, handle: int, scheme: int):
+        """Set time integrator: 0 = Euler, 1 = RK2, 2 = RK4."""
         if self._lib.janus_solver_set_scheme(handle, scheme) != 0:
             raise RuntimeError(self.last_error() or "janus_solver_set_scheme failed")
 

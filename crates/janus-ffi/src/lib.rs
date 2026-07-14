@@ -390,7 +390,7 @@ pub extern "C" fn janus_solver_grid_info(
     0
 }
 
-/// Set time integrator: 0 = Euler, 1 = RK2. Returns 0 on success.
+/// Set time integrator: 0 = Euler, 1 = RK2, 2 = RK4. Returns 0 on success.
 #[no_mangle]
 pub extern "C" fn janus_solver_set_scheme(handle: *mut SolverHandle, scheme: c_int) -> c_int {
     clear_error();
@@ -402,9 +402,10 @@ pub extern "C" fn janus_solver_set_scheme(handle: *mut SolverHandle, scheme: c_i
     h.solver.scheme = match scheme {
         0 => TimeScheme::Euler,
         1 => TimeScheme::Rk2,
+        2 => TimeScheme::Rk4,
         _ => {
             set_error(format!(
-                "unknown scheme id {scheme} (supported: 0=Euler, 1=RK2)"
+                "unknown scheme id {scheme} (supported: 0=Euler, 1=RK2, 2=RK4)"
             ));
             return -1;
         }
