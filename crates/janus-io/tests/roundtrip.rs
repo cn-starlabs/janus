@@ -179,3 +179,49 @@ fn series_naming() {
     );
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn roundtrip_particles() {
+    use janus_io::writer::ParticleBlock;
+
+    let dir = std::env::temp_dir().join(format!("janus_io_particles_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("particles.jvtk");
+
+    let p_bytes = vec![1.23f64, 4.56, 7.89, -1.2, 0.5, 9.87, 6.54, 3.21, 0.0, 1.5]; // two particles
+    let p_bytes_u8 = bytemuck::cast_slice::<f64, u8>(&p_bytes);
+
+    let pb = ParticleBlock {
+        count: 2,
+        stride: 40,
+        layout: vec!["pos2".into(), "vel2".into(), "weight".into()],
+        bytes: p_bytes_u8,
+    };
+
+    JvtkWriter::write_file(
+        &path,
+        [2, 2, 1],
+        [1.0, 1.0, 1.0],
+        [0.0, 0.0, 0.0],
+        0.0,
+        1,
+        [0.0, 0.0],
+        &[],
+        &[],
+        Some(pb),
+    )
+    .unwrap();
+
+    let reader = JvtkReader::open(&path).unwrap();
+    let h = reader.header();
+    let pd = h.particles.as_ref().unwrap();
+    assert_eq!(pd.count, 2);
+    assert_eq!(pd.stride, 40);
+    assert_eq!(pd.layout, vec!["pos2", "vel2", "weight"]);
+
+    let read_u8 = reader.particle_bytes().unwrap();
+    let read_f64 = bytemuck::cast_slice::<u8, f64>(read_u8);
+    assert_eq!(read_f64, p_bytes.as_slice());
+
+    std::fs::remove_dir_all(&dir).ok();
+}

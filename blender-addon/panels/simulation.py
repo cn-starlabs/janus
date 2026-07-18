@@ -32,6 +32,10 @@ class JANUS_PT_simulation(Panel):
             row.operator("janus.simulate", icon="PLAY", text="Start")
         col.prop(props, "sim_cfl")
         col.prop(props, "sim_scheme")
+        col.prop(props, "sim_kernel")
+        if props.sim_kernel == 'ugkwp':
+            col.prop(props, "sim_seed")
+            col.prop(props, "sim_kn_threshold")
         col.prop(props, "sim_steps_per_tick")
         col.prop(props, "sim_output_dir")
 

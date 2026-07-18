@@ -151,7 +151,11 @@ def apply_field_to_mesh(
         kn = reader.cell_field("kn_loc")
         apply_field_array_to_mesh(mesh, field_name, kn, regime_overlay=True, kn_values=kn)
         return
-    apply_field_array_to_mesh(mesh, field_name, reader.cell_field(field_name), regime_overlay=False)
+    try:
+        values = reader.cell_field(field_name)
+    except KeyError:
+        values = np.zeros(reader.header.ncells, dtype=np.float64)
+    apply_field_array_to_mesh(mesh, field_name, values, regime_overlay=False)
 
 
 def apply_live_field_from_solver(

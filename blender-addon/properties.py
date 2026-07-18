@@ -65,6 +65,8 @@ class JanusSceneProperties(bpy.types.PropertyGroup):
             ("mom_y", "Momentum Y", "Y momentum component"),
             ("energy", "Energy", "Total energy density"),
             ("kn_regime", "Kn Regime", "Color by flow regime bands"),
+            ("p_free", "Particle Fraction (p_free)", "Free-transport fraction"),
+            ("particle_count_density", "Particle Density", "Particle count density per cell"),
         ],
         default="rho",
     )
@@ -119,6 +121,28 @@ class JanusSceneProperties(bpy.types.PropertyGroup):
         name="Sim Output Dir",
         subtype="DIR_PATH",
         default="/home/pana/janus/output",
+    )
+    sim_kernel: bpy.props.EnumProperty(
+        name="Solver Kernel",
+        description="The kinetic solver physics kernel",
+        items=[
+            ("ugkwp", "UGKWP (coupled)", "Full unified gas-kinetic wave-particle coupling"),
+            ("dugks", "DUGKS (wave-only)", "Pure-wave deterministic fast path"),
+        ],
+        default="ugkwp",
+    )
+    sim_seed: bpy.props.IntProperty(
+        name="RNG Seed",
+        description="Random number generator seed for particle sampling",
+        default=12345,
+        min=1,
+    )
+    sim_kn_threshold: bpy.props.FloatProperty(
+        name="Kn Cutoff",
+        description="Threshold above which particles are sampled in UGKWP",
+        default=0.1,
+        min=0.0,
+        max=10.0,
     )
 
     bc_role: bpy.props.EnumProperty(

@@ -646,16 +646,16 @@ impl DugksSolver {
         // so we reconstruct: u^{n+1} = u_n + (1/6)*(stage1 + 2*stage2 + 2*stage3 + 2*dist - u_n)
         // Simplifying: u^{n+1} = (1/6)*u_n + (1/6)*stage1 + (1/3)*stage2 + (1/3)*stage3 + (1/3)*dist
         for i in 0..n {
-            self.dist.f[i] = (1.0/6.0) * u_n_f[i]
-                + (1.0/6.0) * self.rk4_stage1_f[i]
-                + (1.0/3.0) * self.rk4_stage2_f[i]
-                + (1.0/3.0) * self.rk4_stage3_f[i]
-                + (1.0/6.0) * self.dist.f[i];
-            self.dist.h[i] = (1.0/6.0) * u_n_h[i]
-                + (1.0/6.0) * self.rk4_stage1_h[i]
-                + (1.0/3.0) * self.rk4_stage2_h[i]
-                + (1.0/3.0) * self.rk4_stage3_h[i]
-                + (1.0/6.0) * self.dist.h[i];
+            self.dist.f[i] = (1.0 / 6.0) * u_n_f[i]
+                + (1.0 / 6.0) * self.rk4_stage1_f[i]
+                + (1.0 / 3.0) * self.rk4_stage2_f[i]
+                + (1.0 / 3.0) * self.rk4_stage3_f[i]
+                + (1.0 / 6.0) * self.dist.f[i];
+            self.dist.h[i] = (1.0 / 6.0) * u_n_h[i]
+                + (1.0 / 6.0) * self.rk4_stage1_h[i]
+                + (1.0 / 3.0) * self.rk4_stage2_h[i]
+                + (1.0 / 3.0) * self.rk4_stage3_h[i]
+                + (1.0 / 6.0) * self.dist.h[i];
         }
         self.update_moments();
     }

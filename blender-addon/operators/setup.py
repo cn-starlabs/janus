@@ -130,6 +130,10 @@ def _build_case_payload(scene: bpy.types.Scene) -> dict:
         "time_scheme": {
             "scheme": ("euler", "rk2", "rk4")[int(props.sim_scheme)]
         },
+        "kernel": props.sim_kernel,
+        "seed": props.sim_seed,
+        "kn_threshold": props.sim_kn_threshold,
+        "output_dir": props.sim_output_dir,
         "scene": {
             "mesh_object": props.mesh_object_name,
             "boundary_tags": [

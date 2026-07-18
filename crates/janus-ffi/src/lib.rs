@@ -6,11 +6,12 @@
 
 use janus_core::config::{BoundaryKind, CaseConfig, Edge};
 use janus_core::distribution::Distribution;
-use janus_io::writer::{FieldData, NamedField};
+use janus_io::writer::{FieldData, NamedField, ParticleBlock};
 use janus_io::JvtkWriter;
+use janus_kinetic::coupled::{FluxKernel, UgkwpSolver};
 use janus_kinetic::kn::update_kn_loc;
 use janus_kinetic::maxwellian::{gh_equilibrium, DOF};
-use janus_kinetic::solver::{DugksSolver, TimeScheme};
+use janus_kinetic::solver::TimeScheme;
 use janus_kinetic::velocity_grid::VelocityGrid2D;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
@@ -42,9 +43,12 @@ pub struct JanusGridInfo {
 /// to Rust, but the type must be public so public FFI entry points do not
 /// trigger Rust's private-interface warnings.
 pub struct SolverHandle {
-    solver: DugksSolver,
-    config: CaseConfig,
-    mu_scratch: Vec<f64>,
+    pub solver: UgkwpSolver,
+    pub config: CaseConfig,
+    pub mu_scratch: Vec<f64>,
+    pub particle_density_scratch: Vec<f64>,
+    pub temperature_scratch: Vec<f64>,
+    pub output_dir: Option<std::path::PathBuf>,
 }
 
 thread_local! {
@@ -72,6 +76,26 @@ struct SolverCreateJson {
     scene: Option<SceneJson>,
     #[serde(default)]
     time_scheme: TimeSchemeJson,
+    #[serde(default = "default_kernel")]
+    kernel: String,
+    #[serde(default = "default_seed")]
+    seed: u64,
+    #[serde(default = "default_kn_threshold")]
+    kn_threshold: f64,
+    #[serde(default)]
+    output_dir: Option<String>,
+}
+
+fn default_kernel() -> String {
+    "ugkwp".to_string()
+}
+
+fn default_seed() -> u64 {
+    12345
+}
+
+fn default_kn_threshold() -> f64 {
+    janus_kinetic::coupled::DEFAULT_KN_THRESHOLD
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -154,13 +178,37 @@ fn build_solver(json: &SolverCreateJson) -> Result<SolverHandle, String> {
     let mut config = json.config.clone();
     apply_scene_boundary_tags(&mut config, json.scene.as_ref());
 
+    // Security Hardening: parameter caps & input validation
+    let ncells = config.grid.ncells();
+    if ncells == 0 || ncells > 4096 * 4096 {
+        return Err(format!("grid cell count exceeds safety limit: {ncells}"));
+    }
+    if json.velocity_grid.n_per_dim == 0 || json.velocity_grid.n_per_dim > 128 {
+        return Err(format!(
+            "velocity grid resolution exceeds safety limit: {}",
+            json.velocity_grid.n_per_dim
+        ));
+    }
+    let rho0 = json.initial.rho;
+    if !rho0.is_finite() || rho0 <= 0.0 {
+        return Err(format!(
+            "initial density must be positive and finite: {rho0}"
+        ));
+    }
+    let t0 = json.initial.temperature;
+    if !t0.is_finite() || t0 <= 0.0 {
+        return Err(format!(
+            "initial temperature must be positive and finite: {t0}"
+        ));
+    }
+    let u0 = json.initial.velocity;
+    if !u0[0].is_finite() || !u0[1].is_finite() {
+        return Err(format!("initial velocity must be finite: {:?}", u0));
+    }
+
     let (vgrid, vw) =
         VelocityGrid2D::simpson(json.velocity_grid.v_max, json.velocity_grid.n_per_dim);
-    let ncells = config.grid.ncells();
     let mut dist = Distribution::zeros(ncells, vgrid, vw);
-    let rho0 = json.initial.rho;
-    let t0 = json.initial.temperature;
-    let u0 = json.initial.velocity;
     let r_gas = config.gas.r_gas;
     for c in 0..ncells {
         for (k, v) in dist.vgrid.iter().enumerate() {
@@ -169,15 +217,49 @@ fn build_solver(json: &SolverCreateJson) -> Result<SolverHandle, String> {
             dist.h[c * dist.nv + k] = h;
         }
     }
-    let mut solver = DugksSolver::new(&config, dist);
-    solver.update_moments();
+    let mut solver = UgkwpSolver::new(&config, dist, json.seed);
+    solver.kn_threshold = json.kn_threshold;
+
+    let kernel_str = json.kernel.trim().to_lowercase();
+    if kernel_str == "dugks" {
+        solver.kernel = FluxKernel::Dugks;
+    } else if kernel_str == "ugkwp" || kernel_str.is_empty() {
+        solver.kernel = FluxKernel::Ugkwp;
+    } else {
+        return Err(format!(
+            "unknown flux kernel '{}' (supported: 'ugkwp', 'dugks')",
+            json.kernel
+        ));
+    }
+
+    solver.wave.update_moments();
     // Apply selected time scheme (Euler, RK2, RK4)
-    solver.scheme = json.time_scheme.to_time_scheme();
+    solver.wave.scheme = json.time_scheme.to_time_scheme();
     let mu_scratch = vec![0.0; ncells];
+    let particle_density_scratch = vec![0.0; ncells];
+    let temperature_scratch = vec![0.0; ncells];
+
+    // Path sandboxing setup
+    let output_dir: Option<std::path::PathBuf> = if let Some(ref dir) = json.output_dir {
+        let p = std::path::Path::new(dir);
+        let abs = if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            std::env::current_dir().unwrap_or_default().join(p)
+        };
+        let _ = std::fs::create_dir_all(&abs);
+        Some(abs.canonicalize().ok().unwrap_or(abs))
+    } else {
+        None
+    };
+
     Ok(SolverHandle {
         solver,
         config,
         mu_scratch,
+        particle_density_scratch,
+        temperature_scratch,
+        output_dir,
     })
 }
 
@@ -228,23 +310,23 @@ fn apply_scene_boundary_tags(config: &mut CaseConfig, scene: Option<&SceneJson>)
 }
 
 fn update_kn_and_mu(handle: &mut SolverHandle) {
-    let ncells = handle.solver.grid.ncells();
+    let ncells = handle.solver.wave.grid.ncells();
     if handle.mu_scratch.len() != ncells {
         handle.mu_scratch.resize(ncells, 0.0);
     }
-    let r_gas = handle.solver.gas_r;
+    let r_gas = handle.solver.wave.gas_r;
     for c in 0..ncells {
-        let t = handle.solver.fields.temperature(c, r_gas, DOF);
+        let t = handle.solver.wave.fields.temperature(c, r_gas, DOF);
         handle.mu_scratch[c] = janus_core::units::vhs_viscosity(
             t,
-            handle.solver.mu_ref,
-            handle.solver.t_ref,
-            handle.solver.omega,
+            handle.solver.wave.mu_ref,
+            handle.solver.wave.t_ref,
+            handle.solver.wave.omega,
         );
     }
     update_kn_loc(
-        &handle.solver.grid,
-        &mut handle.solver.fields,
+        &handle.solver.wave.grid,
+        &mut handle.solver.wave.fields,
         &handle.mu_scratch,
         r_gas,
     );
@@ -266,11 +348,11 @@ fn kn_range(fields: &janus_core::fields::MacroFields) -> [f64; 2] {
     }
 }
 
-fn temperature_field(solver: &DugksSolver) -> Vec<f64> {
-    let n = solver.grid.ncells();
+fn temperature_field(solver: &UgkwpSolver) -> Vec<f64> {
+    let n = solver.wave.grid.ncells();
     let mut t = vec![0.0; n];
     for c in 0..n {
-        t[c] = solver.fields.temperature(c, solver.gas_r, DOF);
+        t[c] = solver.wave.fields.temperature(c, solver.wave.gas_r, DOF);
     }
     t
 }
@@ -348,7 +430,7 @@ pub extern "C" fn janus_solver_step(handle: *mut SolverHandle, dt: f64) -> c_int
         return -1;
     }
     let h = unsafe { &mut *handle };
-    h.solver.step_scheme(dt, &h.config.bcs);
+    h.solver.step(dt, &h.config.bcs);
     update_kn_and_mu(h);
     0
 }
@@ -360,7 +442,7 @@ pub extern "C" fn janus_solver_cfl_dt(handle: *const SolverHandle, cfl: f64) -> 
         return 0.0;
     }
     let h = unsafe { &*handle };
-    h.solver.cfl_dt(cfl)
+    h.solver.wave.cfl_dt(cfl)
 }
 
 /// Fill grid metadata. Returns 0 on success.
@@ -375,7 +457,7 @@ pub extern "C" fn janus_solver_grid_info(
         return -1;
     }
     let h = unsafe { &*handle };
-    let g = h.solver.grid;
+    let g = h.solver.wave.grid;
     unsafe {
         *out = JanusGridInfo {
             nx: g.nx,
@@ -399,7 +481,7 @@ pub extern "C" fn janus_solver_set_scheme(handle: *mut SolverHandle, scheme: c_i
         return -1;
     }
     let h = unsafe { &mut *handle };
-    h.solver.scheme = match scheme {
+    h.solver.wave.scheme = match scheme {
         0 => TimeScheme::Euler,
         1 => TimeScheme::Rk2,
         2 => TimeScheme::Rk4,
@@ -413,7 +495,7 @@ pub extern "C" fn janus_solver_set_scheme(handle: *mut SolverHandle, scheme: c_i
     0
 }
 
-/// Zero-copy view of a named cell field (`rho`, `mom_x`, `mom_y`, `energy`, `kn_loc`, `temperature`).
+/// Zero-copy view of a named cell field (`rho`, `mom_x`, `mom_y`, `energy`, `kn_loc`, `temperature`, `p_free`, `particle_count_density`).
 /// Pointers are valid until the next `janus_solver_step` or `janus_solver_destroy`.
 #[no_mangle]
 pub extern "C" fn janus_solver_field_view(
@@ -426,7 +508,7 @@ pub extern "C" fn janus_solver_field_view(
         set_error("handle, name, or out is null");
         return -1;
     }
-    let h = unsafe { &*handle };
+    let h = unsafe { &mut *(handle as *mut SolverHandle) };
     let name_str = unsafe {
         match CStr::from_ptr(name).to_str() {
             Ok(s) => s,
@@ -436,39 +518,47 @@ pub extern "C" fn janus_solver_field_view(
             }
         }
     };
-    // Temperature is computed on demand into thread-local storage for FFI reads.
-    thread_local! {
-        static TEMP_BUF: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
-    }
     let (ptr, len): (*const f64, usize) = match name_str {
         "rho" => {
-            let s = &h.solver.fields.rho;
+            let s = &h.solver.wave.fields.rho;
             (s.as_ptr(), s.len())
         }
         "mom_x" => {
-            let s = &h.solver.fields.mom[0];
+            let s = &h.solver.wave.fields.mom[0];
             (s.as_ptr(), s.len())
         }
         "mom_y" => {
-            let s = &h.solver.fields.mom[1];
+            let s = &h.solver.wave.fields.mom[1];
             (s.as_ptr(), s.len())
         }
         "energy" => {
-            let s = &h.solver.fields.energy;
+            let s = &h.solver.wave.fields.energy;
             (s.as_ptr(), s.len())
         }
         "kn_loc" => {
-            let s = &h.solver.fields.kn_loc;
+            let s = &h.solver.wave.fields.kn_loc;
             (s.as_ptr(), s.len())
         }
         "temperature" => {
-            let buf = TEMP_BUF.with(|b| {
-                let mut b = b.borrow_mut();
-                *b = temperature_field(&h.solver);
-                b.as_ptr()
-            });
-            let len = h.solver.grid.ncells();
-            (buf, len)
+            let ncells = h.solver.wave.grid.ncells();
+            if h.temperature_scratch.len() != ncells {
+                h.temperature_scratch.resize(ncells, 0.0);
+            }
+            h.temperature_scratch = temperature_field(&h.solver);
+            (h.temperature_scratch.as_ptr(), ncells)
+        }
+        "p_free" => {
+            let s = h.solver.p_free();
+            (s.as_ptr(), s.len())
+        }
+        "particle_count_density" => {
+            let ncells = h.solver.wave.grid.ncells();
+            if h.particle_density_scratch.len() != ncells {
+                h.particle_density_scratch.resize(ncells, 0.0);
+            }
+            h.solver
+                .particle_count_density(&mut h.particle_density_scratch);
+            (h.particle_density_scratch.as_ptr(), ncells)
         }
         _ => {
             set_error(format!("unknown field '{name_str}'"));
@@ -494,7 +584,7 @@ pub extern "C" fn janus_solver_write_jvtk(
         set_error("handle or path is null");
         return -1;
     }
-    let h = unsafe { &*handle };
+    let h = unsafe { &mut *(handle as *mut SolverHandle) };
     let path_str = unsafe {
         match CStr::from_ptr(path).to_str() {
             Ok(s) => s,
@@ -504,12 +594,41 @@ pub extern "C" fn janus_solver_write_jvtk(
             }
         }
     };
+
+    // Security Hardening: path sandboxing validation
+    let target_path = std::path::Path::new(path_str);
+    if target_path
+        .components()
+        .any(|c| c == std::path::Component::ParentDir)
+    {
+        set_error("path contains parent directory traversal (..)");
+        return -1;
+    }
+    if let Some(ref allowed) = h.output_dir {
+        let abs_target = if target_path.is_absolute() {
+            target_path.to_path_buf()
+        } else {
+            allowed.join(target_path)
+        };
+        if !abs_target.starts_with(allowed) {
+            set_error(format!(
+                "path is outside the configured output directory: {path_str}"
+            ));
+            return -1;
+        }
+    }
+
     let temp = temperature_field(&h.solver);
-    let rho = &h.solver.fields.rho;
-    let mom_x = &h.solver.fields.mom[0];
-    let mom_y = &h.solver.fields.mom[1];
-    let energy = &h.solver.fields.energy;
-    let kn_loc = &h.solver.fields.kn_loc;
+    let rho = &h.solver.wave.fields.rho;
+    let mom_x = &h.solver.wave.fields.mom[0];
+    let mom_y = &h.solver.wave.fields.mom[1];
+    let energy = &h.solver.wave.fields.energy;
+    let kn_loc = &h.solver.wave.fields.kn_loc;
+    let p_free = h.solver.p_free();
+
+    let mut particle_density = vec![0.0; h.solver.wave.grid.ncells()];
+    h.solver.particle_count_density(&mut particle_density);
+
     let fields = vec![
         NamedField {
             name: "rho".into(),
@@ -541,9 +660,43 @@ pub extern "C" fn janus_solver_write_jvtk(
             comps: 1,
             data: FieldData::F64(&temp),
         },
+        NamedField {
+            name: "p_free".into(),
+            comps: 1,
+            data: FieldData::F64(p_free),
+        },
+        NamedField {
+            name: "particle_count_density".into(),
+            comps: 1,
+            data: FieldData::F64(&particle_density),
+        },
     ];
-    let g = h.solver.grid;
-    let kn_rng = kn_range(&h.solver.fields);
+
+    let particle_bytes = if h.solver.particles.len() > 0 {
+        let n = h.solver.particles.len();
+        let mut bytes = Vec::with_capacity(n * 40);
+        for i in 0..n {
+            let pos = h.solver.particles.pos[i];
+            let vel = h.solver.particles.vel[i];
+            let w = h.solver.particles.weight[i];
+            bytes.extend_from_slice(bytemuck::bytes_of(&pos));
+            bytes.extend_from_slice(bytemuck::bytes_of(&vel));
+            bytes.extend_from_slice(bytemuck::bytes_of(&w));
+        }
+        Some(bytes)
+    } else {
+        None
+    };
+
+    let pb = particle_bytes.as_ref().map(|b| ParticleBlock {
+        count: h.solver.particles.len() as u64,
+        stride: 40,
+        layout: vec!["pos2".into(), "vel2".into(), "weight".into()],
+        bytes: b,
+    });
+
+    let g = h.solver.wave.grid;
+    let kn_rng = kn_range(&h.solver.wave.fields);
     if let Err(e) = JvtkWriter::write_file(
         path_str,
         [g.nx, g.ny, 1],
@@ -554,7 +707,7 @@ pub extern "C" fn janus_solver_write_jvtk(
         kn_rng,
         &fields,
         &[],
-        None,
+        pb,
     ) {
         set_error(format!("jvtk write failed: {e}"));
         return -1;
@@ -595,6 +748,10 @@ pub extern "C" fn janus_default_case_json() -> *const c_char {
                 velocity_grid: VelocityGridJson::default(),
                 scene: None,
                 time_scheme: TimeSchemeJson::default(),
+                kernel: default_kernel(),
+                seed: default_seed(),
+                kn_threshold: default_kn_threshold(),
+                output_dir: None,
             };
             let json = serde_json::to_string_pretty(&cfg).expect("default case serializes");
             *borrow = Some(CString::new(json).expect("no interior nul in json"));

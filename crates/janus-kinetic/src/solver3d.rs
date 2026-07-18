@@ -100,7 +100,7 @@ pub struct DugksSolver3D {
     face_flux: Vec<f64>, // len = nv, reused per face
     ghost_buf: Vec<f64>, // len = nv, reused per boundary face
     // RK2/RK4 preallocated scratch (zero heap allocation in the step path).
-    rk2_stage_f: Vec<f64>, // len = ncells * nv
+    rk2_stage_f: Vec<f64>,  // len = ncells * nv
     rk4_stage1_f: Vec<f64>, // len = ncells * nv, for RK4
     rk4_stage2_f: Vec<f64>, // len = ncells * nv, for RK4
     rk4_stage3_f: Vec<f64>, // len = ncells * nv, for RK4
@@ -456,11 +456,11 @@ impl DugksSolver3D {
         // Final blend: u^{n+1} = u^n + (1/6)*(k1 + 2*k2 + 2*k3 + k4)
         // = (1/6)*u_n + (1/6)*stage1 + (1/3)*stage2 + (1/3)*stage3 + (1/6)*dist
         for i in 0..n {
-            self.dist.f[i] = (1.0/6.0) * u_n_f[i]
-                + (1.0/6.0) * self.rk4_stage1_f[i]
-                + (1.0/3.0) * self.rk4_stage2_f[i]
-                + (1.0/3.0) * self.rk4_stage3_f[i]
-                + (1.0/6.0) * self.dist.f[i];
+            self.dist.f[i] = (1.0 / 6.0) * u_n_f[i]
+                + (1.0 / 6.0) * self.rk4_stage1_f[i]
+                + (1.0 / 3.0) * self.rk4_stage2_f[i]
+                + (1.0 / 3.0) * self.rk4_stage3_f[i]
+                + (1.0 / 6.0) * self.dist.f[i];
         }
         self.update_moments();
     }
@@ -478,7 +478,11 @@ impl DugksSolver3D {
 
         for c in 0..ncells {
             let rho = self.fields.rho[c];
-            let rho_safe = if rho.is_finite() && rho > 0.0 { rho } else { 1e-6 };
+            let rho_safe = if rho.is_finite() && rho > 0.0 {
+                rho
+            } else {
+                1e-6
+            };
             let t = self.safe_temperature(c);
             self.tau_scratch[c] = self.collision.relaxation_time(
                 rho_safe,

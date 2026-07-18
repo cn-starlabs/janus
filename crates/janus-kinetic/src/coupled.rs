@@ -252,6 +252,25 @@ impl UgkwpSolver {
         (wm + pm, wpx + ppx, wpy + ppy, we + pe)
     }
 
+    /// Last-step per-cell free-transport fraction `p_free = exp(-dt/tau)`.
+    /// Empty / zeros until the first full UGKWP step has run.
+    pub fn p_free(&self) -> &[f64] {
+        &self.p_free_scratch
+    }
+
+    /// Per-cell particle counts (for visualization). Fills `out` (must be
+    /// length `ncells`) with the number of particles currently binned in each
+    /// cell.
+    pub fn particle_count_density(&self, out: &mut [f64]) {
+        out.fill(0.0);
+        for &c in &self.particles.cell {
+            let idx = c as usize;
+            if idx < out.len() {
+                out[idx] += 1.0;
+            }
+        }
+    }
+
     /// Recompute `kn_loc` for every cell from the current wave macro state.
     fn refresh_kn(&mut self) {
         let ncells = self.wave.grid.ncells();
@@ -314,13 +333,13 @@ impl UgkwpSolver {
         // `FluxKernel` docs), so the default construction path
         // (`UgkwpSolver::new`) always executes the full UGKWP split below.
         if self.kernel == FluxKernel::Dugks {
-            self.wave.step(dt, config_bcs);
+            self.wave.step_scheme(dt, config_bcs);
             self.refresh_kn();
             return;
         }
 
-        // 1. Wave step (full domain, deterministic).
-        self.wave.step(dt, config_bcs);
+        // 1. Wave step (full domain, deterministic; respects wave.scheme).
+        self.wave.step_scheme(dt, config_bcs);
 
         // 2. Local Kn.
         self.refresh_kn();
