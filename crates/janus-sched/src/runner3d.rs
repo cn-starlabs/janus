@@ -144,6 +144,49 @@ impl SchedRunner3D {
         }
     }
 
+    /// Apply a simple halo-aware stencil update to a block-local 3D state
+    /// array. Ghost values are read from the current halo buffers at the
+    /// block faces, and the returned sample can be published to adjacent
+    /// blocks for the next exchange round.
+    pub fn halo_aware_block_update_3d(
+        &self,
+        block: &Block3D,
+        halo: &BlockHalo3D,
+        state: &[f64],
+    ) -> (Vec<f64>, HaloBuffer3D) {
+        let width = block.i1 - block.i0;
+        let height = block.j1 - block.j0;
+        let depth = block.k1 - block.k0;
+        assert_eq!(state.len(), width * height * depth);
+
+        let mut updated = Vec::with_capacity(state.len());
+        for k in 0..depth {
+            for j in 0..height {
+                for i in 0..width {
+                    let idx = (k * height + j) * width + i;
+                    let current = state[idx];
+                    let west_val = if i > 0 { state[idx - 1] } else { halo.west.current.get(0).copied().unwrap_or_default() };
+                    let east_val = if i + 1 < width { state[idx + 1] } else { halo.east.current.get(0).copied().unwrap_or_default() };
+                    let south_val = if j > 0 { state[idx - width] } else { halo.south.current.get(0).copied().unwrap_or_default() };
+                    let north_val = if j + 1 < height { state[idx + width] } else { halo.north.current.get(0).copied().unwrap_or_default() };
+                    let down_val = if k > 0 { state[idx - width * height] } else { halo.down.current.get(0).copied().unwrap_or_default() };
+                    let up_val = if k + 1 < depth { state[idx + width * height] } else { halo.up.current.get(0).copied().unwrap_or_default() };
+                    let next_value = current + 0.125 * (west_val + east_val + south_val + north_val + down_val + up_val - 6.0 * current);
+                    updated.push(next_value);
+                }
+            }
+        }
+
+        let halo_values = updated.clone();
+        (
+            updated,
+            HaloBuffer3D {
+                current: halo_values.clone(),
+                next: halo_values,
+            },
+        )
+    }
+
     /// Advance every block one step, each on its own dtact fiber, using
     /// scheduling hints derived from the block's last-measured particle
     /// count. `step_fn` performs the actual block-local physics (owned by
@@ -267,5 +310,24 @@ mod tests {
         assert_eq!(halo.north.current.len(), 6 * 2);
         assert_eq!(halo.down.current.len(), 6 * 4);
         assert_eq!(halo.up.current.len(), 6 * 4);
+    }
+
+    #[test]
+    fn halo_aware_block_update_uses_neighbor_face_values_3d() {
+        let grid = Grid3D::new(4, 4, 4, 1.0, 1.0, 1.0, [0.0, 0.0, 0.0]);
+        let runner = SchedRunner3D::new(grid, 1, 1, 1);
+        let block = runner.blocks[0];
+        let mut halo = BlockHalo3D::for_block(&block);
+        halo.west.current[0] = 2.0;
+        halo.east.current[0] = 3.0;
+        halo.south.current[0] = 1.0;
+        halo.north.current[0] = 4.0;
+        halo.down.current[0] = 0.5;
+        halo.up.current[0] = 1.5;
+
+        let state = vec![1.0; block.ncells()];
+        let (updated, _) = runner.halo_aware_block_update_3d(&block, &halo, &state);
+        let expected = 1.0 + 0.125 * (2.0 + 1.0 + 1.0 + 1.0 + 0.5 + 1.5 - 6.0 * 1.0);
+        assert_eq!(updated[0], expected);
     }
 }

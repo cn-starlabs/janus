@@ -51,6 +51,7 @@
 use dtact::dtact_init;
 use janus_core::grid::Grid2D;
 use janus_sched::block::BlockKind;
+use janus_sched::runner::{BlockHalo, HaloSample};
 use janus_sched::SchedRunner;
 use std::time::Instant;
 
@@ -78,6 +79,30 @@ fn fake_block_step(block: &janus_sched::block::Block, kind: BlockKind) -> u64 {
     }
 }
 
+fn fake_block_step_with_halo(
+    block: &janus_sched::block::Block,
+    kind: BlockKind,
+    halo: &BlockHalo,
+) -> (u64, HaloSample) {
+    let base_cost = fake_block_step(block, kind);
+    let halo_sum: f64 = halo
+        .west
+        .current
+        .iter()
+        .chain(halo.east.current.iter())
+        .chain(halo.south.current.iter())
+        .chain(halo.north.current.iter())
+        .sum();
+    let adjusted_cost = base_cost + halo_sum.round().abs() as u64;
+    let sample = HaloSample {
+        west: vec![adjusted_cost as f64],
+        east: vec![adjusted_cost as f64 / 2.0],
+        south: vec![],
+        north: vec![],
+    };
+    (adjusted_cost, sample)
+}
+
 #[dtact_init]
 fn main() {
     let nx = 64;
@@ -98,7 +123,7 @@ fn main() {
 
     let t0 = Instant::now();
     for _ in 0..n_steps {
-        runner_static.step_all_blocks(fake_block_step);
+        runner_static.step_all_blocks_with_halo(fake_block_step_with_halo);
     }
     let static_elapsed = t0.elapsed();
 
@@ -110,7 +135,7 @@ fn main() {
 
     let t1 = Instant::now();
     for _ in 0..n_steps {
-        runner_deflect.step_all_blocks(fake_block_step);
+        runner_deflect.step_all_blocks_with_halo(fake_block_step_with_halo);
     }
     let deflect_elapsed = t1.elapsed();
 

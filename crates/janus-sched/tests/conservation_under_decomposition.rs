@@ -63,7 +63,7 @@ fn conservation_under_block_decomposition_matches_single_block() {
     let (vgrid, vw) = VelocityGrid2D::simpson(1500.0, 13);
 
     // Single-block (whole-domain) reference run.
-    let config_single = periodic_case(8, 8, 0.02, 0.02, gas);
+    let config_single = periodic_case(8, 8, 0.02, 0.02, gas.clone());
     let dist_single = Distribution::zeros(config_single.grid.ncells(), vgrid.clone(), vw.clone());
     let mut solver_single = UgkwpSolver::new(&config_single, dist_single, 7);
     init_uniform_ugkwp(&mut solver_single, 1.0, [12.0, -6.0], 310.0);
@@ -83,7 +83,7 @@ fn conservation_under_block_decomposition_matches_single_block() {
     for b in &blocks {
         let bw = b.i1 - b.i0;
         let bh = b.j1 - b.j0;
-        let config_block = periodic_case(bw, bh, 0.02, 0.02, gas);
+        let config_block = periodic_case(bw, bh, 0.02, 0.02, gas.clone());
         let dist_block = Distribution::zeros(config_block.grid.ncells(), vgrid.clone(), vw.clone());
         let mut solver_block = UgkwpSolver::new(&config_block, dist_block, 7);
         init_uniform_ugkwp(&mut solver_block, 1.0, [12.0, -6.0], 310.0);
