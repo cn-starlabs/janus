@@ -318,10 +318,12 @@ fn wall_bounded_rarefied_flow_shows_temperature_jump() {
         south: BoundaryKind::DiffuseWall {
             temperature: t_cold,
             wall_velocity: [0.0, 0.0],
+            accommodation: 1.0,
         },
         north: BoundaryKind::DiffuseWall {
             temperature: t_hot,
             wall_velocity: [0.0, 0.0],
+            accommodation: 1.0,
         },
     };
     let config = CaseConfig { grid, bcs, gas };
@@ -494,10 +496,12 @@ fn two_dimensional_and_three_dimensional_solvers_agree_on_symmetric_couette() {
         south: BoundaryKind::DiffuseWall {
             temperature: t_wall,
             wall_velocity: [0.0, 0.0],
+            accommodation: 1.0,
         },
         north: BoundaryKind::DiffuseWall {
             temperature: t_wall,
             wall_velocity: [u_wall, 0.0],
+            accommodation: 1.0,
         },
     };
     let config2d = CaseConfig {
@@ -533,10 +537,12 @@ fn two_dimensional_and_three_dimensional_solvers_agree_on_symmetric_couette() {
         south: BoundaryKind3D::DiffuseWall {
             temperature: t_wall,
             wall_velocity: [0.0, 0.0, 0.0],
+            accommodation: 1.0,
         },
         north: BoundaryKind3D::DiffuseWall {
             temperature: t_wall,
             wall_velocity: [u_wall, 0.0, 0.0],
+            accommodation: 1.0,
         },
         down: BoundaryKind3D::Periodic,
         up: BoundaryKind3D::Periodic,

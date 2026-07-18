@@ -7,6 +7,23 @@
 use crate::grid::Grid2D;
 use serde::{Deserialize, Serialize};
 
+fn default_accommodation() -> f64 {
+    1.0
+}
+
+fn default_gas_model_kind() -> String {
+    "ideal_vhs".to_string()
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CollisionModelKind {
+    #[default]
+    #[serde(rename = "shakhov")]
+    Shakhov,
+    #[serde(rename = "fast_spectral")]
+    FastSpectral,
+}
+
 /// Which physical boundary condition family to apply at a domain edge.
 ///
 /// The concrete numerical implementation of each kind lives in
@@ -20,6 +37,8 @@ pub enum BoundaryKind {
     DiffuseWall {
         temperature: f64,
         wall_velocity: [f64; 2],
+        #[serde(default = "default_accommodation")]
+        accommodation: f64,
     },
     /// Specular reflection wall (mirrors the normal velocity component).
     SpecularWall,
@@ -79,7 +98,7 @@ impl BoundaryAssignment {
 }
 
 /// Monatomic ideal-gas properties + VHS viscosity law parameters.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GasProperties {
     /// Specific gas constant R = R_universal / molar_mass, J/(kg*K).
     pub r_gas: f64,
@@ -93,6 +112,29 @@ pub struct GasProperties {
     pub t_ref: f64,
     /// Prandtl number used by the Shakhov model (monatomic gas: Pr = 2/3).
     pub prandtl: f64,
+    /// Gas model kind: "ideal_vhs" (default) or "virial".
+    #[serde(default = "default_gas_model_kind")]
+    pub gas_model_kind: String,
+    /// Collision model kind for the solver hot path. Defaults to Shakhov.
+    #[serde(default)]
+    pub collision_model_kind: CollisionModelKind,
+    /// Second virial coefficient coefficients (b0, b1, b2).
+    #[serde(default)]
+    pub b0: f64,
+    #[serde(default)]
+    pub b1: f64,
+    #[serde(default)]
+    pub b2: f64,
+    /// Third virial coefficient coefficients (c0, c1, c2).
+    #[serde(default)]
+    pub c0: f64,
+    #[serde(default)]
+    pub c1: f64,
+    #[serde(default)]
+    pub c2: f64,
+    /// Internal degrees of freedom (0.0 for monatomic, 2.0 for diatomic rigid rotor).
+    #[serde(default)]
+    pub internal_dof: f64,
 }
 
 impl GasProperties {
@@ -106,6 +148,15 @@ impl GasProperties {
             mu_ref: 2.117e-5,
             t_ref: 273.15,
             prandtl: 2.0 / 3.0,
+            gas_model_kind: default_gas_model_kind(),
+            collision_model_kind: CollisionModelKind::Shakhov,
+            b0: 0.0,
+            b1: 0.0,
+            b2: 0.0,
+            c0: 0.0,
+            c1: 0.0,
+            c2: 0.0,
+            internal_dof: 0.0,
         }
     }
 }
@@ -130,6 +181,8 @@ pub enum BoundaryKind3D {
     DiffuseWall {
         temperature: f64,
         wall_velocity: [f64; 3],
+        #[serde(default = "default_accommodation")]
+        accommodation: f64,
     },
     SpecularWall,
     VelocityInlet {
@@ -214,5 +267,11 @@ mod tests {
     fn monatomic_default_prandtl_two_thirds() {
         let g = GasProperties::monatomic_default();
         assert!((g.prandtl - 2.0 / 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn monatomic_default_collision_model_is_shakhov() {
+        let g = GasProperties::monatomic_default();
+        assert_eq!(g.collision_model_kind, CollisionModelKind::Shakhov);
     }
 }

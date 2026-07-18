@@ -55,10 +55,12 @@ fn couette_transition_regime_no_blowup_and_shows_slip() {
         south: BoundaryKind::DiffuseWall {
             temperature: t_wall,
             wall_velocity: [0.0, 0.0],
+            accommodation: 1.0,
         },
         north: BoundaryKind::DiffuseWall {
             temperature: t_wall,
             wall_velocity: [u_wall, 0.0],
+            accommodation: 1.0,
         },
     };
     let config = CaseConfig { grid, bcs, gas };

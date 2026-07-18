@@ -355,6 +355,7 @@ impl UgkwpSolver3D {
                 if let BoundaryKind3D::DiffuseWall {
                     temperature,
                     wall_velocity,
+                    ..
                 } = config_bcs.west
                 {
                     sample_wall_reemission(
@@ -376,6 +377,7 @@ impl UgkwpSolver3D {
                 if let BoundaryKind3D::DiffuseWall {
                     temperature,
                     wall_velocity,
+                    ..
                 } = config_bcs.east
                 {
                     sample_wall_reemission(
@@ -406,6 +408,7 @@ impl UgkwpSolver3D {
                 if let BoundaryKind3D::DiffuseWall {
                     temperature,
                     wall_velocity,
+                    ..
                 } = config_bcs.south
                 {
                     sample_wall_reemission(
@@ -427,6 +430,7 @@ impl UgkwpSolver3D {
                 if let BoundaryKind3D::DiffuseWall {
                     temperature,
                     wall_velocity,
+                    ..
                 } = config_bcs.north
                 {
                     sample_wall_reemission(
@@ -457,6 +461,7 @@ impl UgkwpSolver3D {
                 if let BoundaryKind3D::DiffuseWall {
                     temperature,
                     wall_velocity,
+                    ..
                 } = config_bcs.down
                 {
                     sample_wall_reemission(
@@ -478,6 +483,7 @@ impl UgkwpSolver3D {
                 if let BoundaryKind3D::DiffuseWall {
                     temperature,
                     wall_velocity,
+                    ..
                 } = config_bcs.up
                 {
                     sample_wall_reemission(

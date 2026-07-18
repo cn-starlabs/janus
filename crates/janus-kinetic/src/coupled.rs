@@ -275,16 +275,12 @@ impl UgkwpSolver {
     fn refresh_kn(&mut self) {
         let ncells = self.wave.grid.ncells();
         for c in 0..ncells {
+            let rho = self.wave.fields.rho[c];
             let t = self
                 .wave
                 .fields
-                .temperature(c, self.wave.gas_r, crate::maxwellian::DOF);
-            self.mu_scratch[c] = janus_core::units::vhs_viscosity(
-                t,
-                self.wave.mu_ref,
-                self.wave.t_ref,
-                self.wave.omega,
-            );
+                .temperature(c, self.wave.gas_r, self.wave.dof_total);
+            self.mu_scratch[c] = self.wave.gas_model.viscosity(rho, t);
         }
         update_kn_loc(
             &self.wave.grid,
@@ -421,7 +417,16 @@ impl UgkwpSolver {
                 let f_cell = &mut d.f[c * nv..c * nv + nv];
                 let h_cell = &mut d.h[c * nv..c * nv + nv];
                 set_conservative_equilibrium_2d(
-                    f_cell, h_cell, &d.vgrid, &d.vw, r_gas, tgt_rho, tgt_mx, tgt_my, tgt_e,
+                    f_cell,
+                    h_cell,
+                    &d.vgrid,
+                    &d.vw,
+                    r_gas,
+                    tgt_rho,
+                    tgt_mx,
+                    tgt_my,
+                    tgt_e,
+                    self.wave.dof_total,
                 );
             }
             self.particles.clear();
@@ -445,19 +450,11 @@ impl UgkwpSolver {
         //      closed-form relaxation).
         for c in 0..ncells {
             let rho = self.wave.fields.rho[c];
-            let t = self
-                .wave
-                .fields
-                .temperature(c, r_gas, crate::maxwellian::DOF);
+            let t = self.wave.fields.temperature(c, r_gas, self.wave.dof_total);
             self.p_free_scratch[c] = if rho > 0.0 {
-                let tau = self.wave.collision.relaxation_time(
-                    rho,
-                    t,
-                    r_gas,
-                    self.wave.mu_ref,
-                    self.wave.t_ref,
-                    self.wave.omega,
-                );
+                let mu = self.wave.gas_model.viscosity(rho, t);
+                let p = self.wave.gas_model.pressure(rho, t).max(f64::MIN_POSITIVE);
+                let tau = mu / p;
                 if tau.is_finite() && tau > 0.0 {
                     (-dt / tau).exp()
                 } else {
@@ -493,10 +490,7 @@ impl UgkwpSolver {
                 // representation; `1 - p_free` remains in the wave field.
                 let rho_vol_particle = rho_vol_total * p_free;
                 let u = self.wave.fields.velocity(c);
-                let t = self
-                    .wave
-                    .fields
-                    .temperature(c, r_gas, crate::maxwellian::DOF);
+                let t = self.wave.fields.temperature(c, r_gas, self.wave.dof_total);
                 let center = grid.center(i, j);
                 let half_extent = [grid.dx * 0.5, grid.dy * 0.5];
                 self.particles.sample_cell(
@@ -620,6 +614,7 @@ impl UgkwpSolver {
                 if let BoundaryKind::DiffuseWall {
                     temperature,
                     wall_velocity,
+                    accommodation,
                 } = config_bcs.west
                 {
                     sample_wall_reemission(
@@ -628,6 +623,7 @@ impl UgkwpSolver {
                         wall_velocity,
                         temperature,
                         r_gas,
+                        accommodation,
                         v,
                         zeta,
                     );
@@ -642,6 +638,7 @@ impl UgkwpSolver {
                 if let BoundaryKind::DiffuseWall {
                     temperature,
                     wall_velocity,
+                    accommodation,
                 } = config_bcs.east
                 {
                     sample_wall_reemission(
@@ -650,6 +647,7 @@ impl UgkwpSolver {
                         wall_velocity,
                         temperature,
                         r_gas,
+                        accommodation,
                         v,
                         zeta,
                     );
@@ -673,6 +671,7 @@ impl UgkwpSolver {
                 if let BoundaryKind::DiffuseWall {
                     temperature,
                     wall_velocity,
+                    accommodation,
                 } = config_bcs.south
                 {
                     sample_wall_reemission(
@@ -681,6 +680,7 @@ impl UgkwpSolver {
                         wall_velocity,
                         temperature,
                         r_gas,
+                        accommodation,
                         v,
                         zeta,
                     );
@@ -695,6 +695,7 @@ impl UgkwpSolver {
                 if let BoundaryKind::DiffuseWall {
                     temperature,
                     wall_velocity,
+                    accommodation,
                 } = config_bcs.north
                 {
                     sample_wall_reemission(
@@ -703,6 +704,7 @@ impl UgkwpSolver {
                         wall_velocity,
                         temperature,
                         r_gas,
+                        accommodation,
                         v,
                         zeta,
                     );
@@ -729,19 +731,11 @@ impl UgkwpSolver {
         // allocation, ENGINEERING_SPEC.md §8).
         for c in 0..ncells {
             let rho = self.wave.fields.rho[c];
-            let t = self
-                .wave
-                .fields
-                .temperature(c, r_gas, crate::maxwellian::DOF);
+            let t = self.wave.fields.temperature(c, r_gas, self.wave.dof_total);
             self.tau_scratch[c] = if rho > 0.0 {
-                self.wave.collision.relaxation_time(
-                    rho,
-                    t,
-                    r_gas,
-                    self.wave.mu_ref,
-                    self.wave.t_ref,
-                    self.wave.omega,
-                )
+                let mu = self.wave.gas_model.viscosity(rho, t);
+                let p = self.wave.gas_model.pressure(rho, t).max(f64::MIN_POSITIVE);
+                mu / p
             } else {
                 f64::INFINITY
             };
@@ -792,7 +786,13 @@ impl UgkwpSolver {
         // particles undergoing collision, using the CURRENT aggregate
         // moments of the particles in that cell about to collide, means the
         // redraw does not change that subset's total momentum/energy).
-        redraw_collided_particles(&mut self.particles, &idx_to_collide, &mut self.rng, r_gas);
+        redraw_collided_particles(
+            &mut self.particles,
+            &idx_to_collide,
+            &mut self.rng,
+            r_gas,
+            self.wave.dof_total,
+        );
 
         // 5. Particles persist to the next step, where they are recombined into
         // the wave DISTRIBUTION at the start of `step` (see the recombine block).
@@ -807,10 +807,12 @@ impl UgkwpSolver {
 }
 
 /// Sample a fresh into-domain velocity (and reduced-`zeta` internal-energy
-/// carrier) for a particle re-emitted from a fully diffuse wall (Maxwell
-/// full accommodation), overwriting `v`/`zeta` in place. `inward` is the unit
-/// vector pointing INTO the domain from the wall (i.e. the negative of the
-/// wave-side BC's outward `normal` convention in `bc.rs`).
+/// carrier) for a particle re-emitted from a diffuse wall, overwriting `v`/
+/// `zeta` in place. `inward` is the unit vector pointing INTO the domain
+/// from the wall (i.e. the negative of the wave-side BC's outward `normal`
+/// convention in `bc.rs`). With `accommodation = 0.0` the behavior becomes
+/// pure specular reflection; with `accommodation = 1.0` it becomes the
+/// diffuse Maxwellian re-emission used by the full-accommodation limit.
 ///
 /// Physical construction (standard DSMC/kinetic-theory diffuse-wall
 /// re-emission, e.g. Bird 1994 §"Diffuse reflection with incomplete/complete
@@ -843,27 +845,45 @@ fn sample_wall_reemission(
     wall_velocity: [f64; 2],
     temperature: f64,
     r_gas: f64,
+    accommodation: f64,
     v: &mut [f64; 2],
     zeta: &mut f64,
 ) {
+    let rel = [v[0] - wall_velocity[0], v[1] - wall_velocity[1]];
+    let specular = [
+        wall_velocity[0] + rel[0] - 2.0 * (rel[0] * inward[0] + rel[1] * inward[1]) * inward[0],
+        wall_velocity[1] + rel[1] - 2.0 * (rel[0] * inward[0] + rel[1] * inward[1]) * inward[1],
+    ];
+
+    if accommodation <= 0.0 {
+        v[0] = specular[0];
+        v[1] = specular[1];
+        return;
+    }
+
     let rt = r_gas * temperature;
     let std_dev = rt.max(0.0).sqrt();
 
-    // Flux-weighted normal-speed draw (Rayleigh CDF inversion), then convert
-    // to a full velocity: normal component along `inward`, tangential
-    // component (perpendicular to `inward`) drawn as an ordinary Gaussian.
-    let u1 = rng.uniform().min(1.0 - 1e-15);
-    let c_n = (-2.0 * rt * (1.0 - u1).ln()).sqrt();
-    let c_t = std_dev * rng.normal();
+    if rng.uniform() < accommodation {
+        // Flux-weighted normal-speed draw (Rayleigh CDF inversion), then convert
+        // to a full velocity: normal component along `inward`, tangential
+        // component (perpendicular to `inward`) drawn as an ordinary Gaussian.
+        let u1 = rng.uniform().min(1.0 - 1e-15);
+        let c_n = (-2.0 * rt * (1.0 - u1).ln()).sqrt();
+        let c_t = std_dev * rng.normal();
 
-    // Tangential unit vector (perpendicular to `inward`, axis-aligned since
-    // `inward` is always exactly [+-1,0] or [0,+-1] for this Cartesian grid's
-    // edges): rotate `inward` by 90 degrees.
-    let tangent = [-inward[1], inward[0]];
+        // Tangential unit vector (perpendicular to `inward`, axis-aligned since
+        // `inward` is always exactly [+-1,0] or [0,+-1] for this Cartesian grid's
+        // edges): rotate `inward` by 90 degrees.
+        let tangent = [-inward[1], inward[0]];
 
-    v[0] = wall_velocity[0] + inward[0] * c_n + tangent[0] * c_t;
-    v[1] = wall_velocity[1] + inward[1] * c_n + tangent[1] * c_t;
-    *zeta = std_dev * rng.normal();
+        v[0] = wall_velocity[0] + inward[0] * c_n + tangent[0] * c_t;
+        v[1] = wall_velocity[1] + inward[1] * c_n + tangent[1] * c_t;
+        *zeta = std_dev * rng.normal();
+    } else {
+        v[0] = specular[0];
+        v[1] = specular[1];
+    }
 }
 
 /// Redraw the velocities/zeta of the particles at `indices` using a
@@ -878,6 +898,7 @@ fn redraw_collided_particles(
     indices: &[usize],
     rng: &mut Rng,
     r_gas: f64,
+    dof_total: f64,
 ) {
     if indices.is_empty() {
         return;
@@ -917,8 +938,8 @@ fn redraw_collided_particles(
             let cy = particles.vel[i][1] - u[1];
             e2 += w * (cx * cx + cy * cy + particles.zeta[i] * particles.zeta[i]);
         }
-        // T from equipartition over DOF=3 (2 in-plane + 1 reduced):
-        let t = (e2 / mass) / crate::maxwellian::DOF;
+        // T from equipartition over the gas model's total DOF:
+        let t = (e2 / mass) / dof_total;
         let std_dev = (r_gas * t).max(0.0).sqrt();
 
         // Draw fresh velocities/zeta, then rescale (same trick as
@@ -981,11 +1002,12 @@ fn set_conservative_equilibrium_2d(
     tgt_momx: f64,
     tgt_momy: f64,
     tgt_e: f64,
+    dof_total: f64,
 ) {
     let nv = vw.len();
     let u = [tgt_momx / tgt_rho, tgt_momy / tgt_rho];
     let umag2 = u[0] * u[0] + u[1] * u[1];
-    let t = (((2.0 * tgt_e / tgt_rho) - umag2) / (crate::maxwellian::DOF * r_gas)).max(1e-6);
+    let t = (((2.0 * tgt_e / tgt_rho) - umag2) / (dof_total * r_gas)).max(1e-6);
 
     let (mut s1, mut sx, mut sy) = (0.0, 0.0, 0.0);
     let (mut sxx, mut sxy, mut syy) = (0.0, 0.0, 0.0);
@@ -1072,6 +1094,26 @@ mod tests {
             }
         }
         solver.wave.update_moments();
+    }
+
+    #[test]
+    fn partial_accommodation_can_specularly_reflect() {
+        let mut rng = Rng::new(1234);
+        let mut v = [4.0, -1.0];
+        let mut zeta = 0.5;
+        sample_wall_reemission(
+            &mut rng,
+            [1.0, 0.0],
+            [0.0, 0.0],
+            300.0,
+            287.0,
+            0.0,
+            &mut v,
+            &mut zeta,
+        );
+        assert!((v[0] + 4.0).abs() < 1e-12);
+        assert!((v[1] + 1.0).abs() < 1e-12);
+        assert!((zeta - 0.5).abs() < 1e-12);
     }
 
     #[test]
@@ -1481,6 +1523,7 @@ mod tests {
                 wall_velocity,
                 temperature,
                 r_gas,
+                1.0,
                 &mut v,
                 &mut zeta,
             );

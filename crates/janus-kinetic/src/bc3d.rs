@@ -31,12 +31,13 @@ pub trait BoundaryCondition3D {
     );
 }
 
-/// Fully diffuse wall (Maxwell full accommodation), 3D: identical
+/// Fully diffuse wall (Maxwell mixed accommodation), 3D: identical
 /// mass-flux-balance construction to the 2D `bc::DiffuseWall`, generalized
 /// to a 3-component velocity/normal.
 pub struct DiffuseWall3D {
     pub temperature: f64,
     pub wall_velocity: [f64; 3],
+    pub accommodation: f64,
 }
 
 impl BoundaryCondition3D for DiffuseWall3D {
@@ -69,9 +70,18 @@ impl BoundaryCondition3D for DiffuseWall3D {
         for (k, v) in vgrid.iter().enumerate() {
             let vn = vdotn(*v, normal);
             f_ghost[k] = if vn < 0.0 {
-                maxwellian_3d(rho_w, self.wall_velocity, self.temperature, r_gas, *v)
+                let diff = maxwellian_3d(rho_w, self.wall_velocity, self.temperature, r_gas, *v);
+                let vr = [
+                    v[0] - 2.0 * vn * normal[0],
+                    v[1] - 2.0 * vn * normal[1],
+                    v[2] - 2.0 * vn * normal[2],
+                ];
+                let idx = nearest_velocity_index(vgrid, vr);
+                let spec = f_interior[idx];
+                self.accommodation * diff + (1.0 - self.accommodation) * spec
             } else {
-                f_interior[k]
+                f_ghost[k] = f_interior[k];
+                f_ghost[k]
             };
         }
     }
@@ -213,6 +223,7 @@ pub enum BoundaryConditionKernel3D {
     DiffuseWall {
         temperature: f64,
         wall_velocity: [f64; 3],
+        accommodation: f64,
     },
     SpecularWall,
     VelocityInlet {
@@ -238,9 +249,11 @@ impl BoundaryConditionKernel3D {
             BoundaryKind3D::DiffuseWall {
                 temperature,
                 wall_velocity,
+                accommodation,
             } => Self::DiffuseWall {
                 temperature,
                 wall_velocity,
+                accommodation,
             },
             BoundaryKind3D::SpecularWall => Self::SpecularWall,
             BoundaryKind3D::VelocityInlet {
@@ -279,9 +292,11 @@ impl BoundaryConditionKernel3D {
             Self::DiffuseWall {
                 temperature,
                 wall_velocity,
+                accommodation,
             } => DiffuseWall3D {
                 temperature,
                 wall_velocity,
+                accommodation,
             }
             .apply(f_interior, vgrid, vw, normal, r_gas, f_ghost),
             Self::SpecularWall => {
@@ -331,6 +346,7 @@ mod tests {
         let wall = DiffuseWall3D {
             temperature: t,
             wall_velocity: [0.0, 0.0, 0.0],
+            accommodation: 1.0,
         };
         let normal = [1.0, 0.0, 0.0];
         let mut f_ghost = vec![0.0; vgrid.len()];

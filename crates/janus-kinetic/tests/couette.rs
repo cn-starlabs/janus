@@ -45,10 +45,12 @@ fn couette_linear_velocity_profile() {
         south: BoundaryKind::DiffuseWall {
             temperature: t_wall,
             wall_velocity: [0.0, 0.0],
+            accommodation: 1.0,
         },
         north: BoundaryKind::DiffuseWall {
             temperature: t_wall,
             wall_velocity: [u_wall, 0.0],
+            accommodation: 1.0,
         },
     };
     let config = CaseConfig { grid, bcs, gas };

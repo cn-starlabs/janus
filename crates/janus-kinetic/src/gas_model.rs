@@ -452,6 +452,36 @@ impl GasModel for CustomGasModel {
 // monatomic_default()`'s `internal_dof: 0.0` default) and replace the bare
 // `DOF` reads at each call site with `self.dof_total`.
 
+/// Create a GasModel from GasProperties.
+pub fn create_gas_model(gp: &janus_core::config::GasProperties) -> std::sync::Arc<dyn GasModel> {
+    match gp.gas_model_kind.to_lowercase().as_str() {
+        "virial" => std::sync::Arc::new(VirialGasModel {
+            r_gas: gp.r_gas,
+            mu_ref: gp.mu_ref,
+            t_ref: gp.t_ref,
+            omega: gp.vhs_omega,
+            prandtl: gp.prandtl,
+            coeffs: VirialCoefficients {
+                b0: gp.b0,
+                b1: gp.b1,
+                b2: gp.b2,
+                c0: gp.c0,
+                c1: gp.c1,
+                c2: gp.c2,
+            },
+            internal_dof: gp.internal_dof,
+        }),
+        _ => std::sync::Arc::new(IdealVhsGasModel {
+            r_gas: gp.r_gas,
+            mu_ref: gp.mu_ref,
+            t_ref: gp.t_ref,
+            omega: gp.vhs_omega,
+            prandtl: gp.prandtl,
+            internal_dof: gp.internal_dof,
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

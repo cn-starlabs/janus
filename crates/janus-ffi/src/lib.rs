@@ -283,6 +283,7 @@ fn apply_scene_boundary_tags(config: &mut CaseConfig, scene: Option<&SceneJson>)
             "diffusewall" | "wall" => BoundaryKind::DiffuseWall {
                 temperature: tag.temperature.unwrap_or(300.0),
                 wall_velocity: tag.velocity.unwrap_or([0.0, 0.0]),
+                accommodation: 1.0,
             },
             "specularwall" => BoundaryKind::SpecularWall,
             "velocityinlet" => BoundaryKind::VelocityInlet {
@@ -736,10 +737,12 @@ pub extern "C" fn janus_default_case_json() -> *const c_char {
                 south: BoundaryKind::DiffuseWall {
                     temperature: 300.0,
                     wall_velocity: [0.0, 0.0],
+                    accommodation: 1.0,
                 },
                 north: BoundaryKind::DiffuseWall {
                     temperature: 300.0,
                     wall_velocity: [50.0, 0.0],
+                    accommodation: 1.0,
                 },
             };
             let cfg = SolverCreateJson {

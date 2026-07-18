@@ -203,10 +203,12 @@ fn main() {
             south: BoundaryKind::DiffuseWall {
                 temperature: 300.0,
                 wall_velocity: [0.0, 0.0],
+                accommodation: 1.0,
             },
             north: BoundaryKind::DiffuseWall {
                 temperature: 300.0,
                 wall_velocity: [50.0, 0.0],
+                accommodation: 1.0,
             },
         };
         let config = CaseConfig { grid, bcs, gas };

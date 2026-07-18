@@ -105,6 +105,7 @@
 
 use crate::bc;
 use crate::collision::{Collision, Shakhov};
+use crate::gas_model::{create_gas_model, GasModel};
 use crate::maxwellian::DOF;
 use janus_core::config::{BoundaryKind, CaseConfig, Edge};
 use janus_core::distribution::Distribution;
@@ -176,6 +177,17 @@ pub struct DugksSolver {
     pub t_ref: f64,
     pub omega: f64,
     pub collision: Shakhov,
+    /// Total effective degrees of freedom from the gas model (monatomic default:
+    /// `DOF = 3`; diatomic: 5; etc.). All temperature / equilibrium / relaxation
+    /// calls in the solver hot path use this value rather than the crate-wide
+    /// `maxwellian::DOF` constant, so polyatomic gases (set via `gas_model_kind`
+    /// + `internal_dof` in `GasProperties`) work without code changes.
+    pub dof_total: f64,
+    /// Dynamic gas model (EOS + transport). Consulted once per cell per step for
+    /// pressure/viscosity (per-cell thermodynamic level, not per-velocity-node),
+    /// so `Arc<dyn GasModel>` dynamic dispatch is spec-sanctioned here (see
+    /// `gas_model.rs` module docs, ENGINEERING_SPEC.md §10b).
+    pub gas_model: std::sync::Arc<dyn GasModel>,
     pub dist: Distribution,
     dist_scratch: Distribution, // double buffer, same shape as dist
     pub fields: MacroFields,
@@ -220,6 +232,8 @@ impl DugksSolver {
             BoundaryKind::Periodic => BoundaryKindResolved::Periodic,
             _ => BoundaryKindResolved::Other,
         };
+        let gas_model = create_gas_model(&config.gas);
+        let dof_total = gas_model.total_dof();
         Self {
             grid: config.grid,
             gas_r: config.gas.r_gas,
@@ -227,6 +241,8 @@ impl DugksSolver {
             t_ref: config.gas.t_ref,
             omega: config.gas.vhs_omega,
             collision: Shakhov::new(config.gas.prandtl),
+            dof_total,
+            gas_model,
             dist,
             dist_scratch,
             fields,
@@ -346,7 +362,7 @@ impl DugksSolver {
     fn cell_macro(&self, c: usize) -> (f64, [f64; 2], f64, [f64; 2]) {
         let rho = self.fields.rho[c];
         let u = self.fields.velocity(c);
-        let t = self.fields.temperature(c, self.gas_r, DOF);
+        let t = self.fields.temperature(c, self.gas_r, self.dof_total);
         let q = [self.fields.heat[0][c], self.fields.heat[1][c]];
         (rho, u, t, q)
     }
@@ -433,9 +449,15 @@ impl DugksSolver {
                 }
             };
 
-            let (geq, heq) = self
-                .collision
-                .equilibrium(up.rho, up.u, up.t, self.gas_r, up.q, v);
+            let (geq, heq) = self.collision.equilibrium_with_dof(
+                up.rho,
+                up.u,
+                up.t,
+                self.gas_r,
+                up.q,
+                v,
+                self.dof_total,
+            );
             let g_face = (up.tau * up.g + dt_half * geq) / (up.tau + dt_half);
             let h_face = (up.tau * up.h + dt_half * heq) / (up.tau + dt_half);
             self.face_flux_g[k] = g_face * vn;
@@ -499,9 +521,15 @@ impl DugksSolver {
             let (rho_up, u_up, t_up, q_up) = (rho_in, u_in, t_in, q_in);
             let tau_up = tau_in;
 
-            let (geq, heq) = self
-                .collision
-                .equilibrium(rho_up, u_up, t_up, self.gas_r, q_up, v);
+            let (geq, heq) = self.collision.equilibrium_with_dof(
+                rho_up,
+                u_up,
+                t_up,
+                self.gas_r,
+                q_up,
+                v,
+                self.dof_total,
+            );
             let g_face = (tau_up * g_up + dt_half * geq) / (tau_up + dt_half);
             let h_face = (tau_up * h_up + dt_half * heq) / (tau_up + dt_half);
             self.face_flux_g[k] = g_face * vn;
@@ -675,15 +703,10 @@ impl DugksSolver {
 
         for c in 0..ncells {
             let rho = self.fields.rho[c];
-            let t = self.fields.temperature(c, self.gas_r, DOF);
-            self.tau_scratch[c] = self.collision.relaxation_time(
-                rho,
-                t,
-                self.gas_r,
-                self.mu_ref,
-                self.t_ref,
-                self.omega,
-            );
+            let t = self.fields.temperature(c, self.gas_r, self.dof_total);
+            let mu = self.gas_model.viscosity(rho, t);
+            let p = self.gas_model.pressure(rho, t).max(f64::MIN_POSITIVE);
+            self.tau_scratch[c] = mu / p;
         }
 
         for j in 0..ny {
@@ -917,7 +940,7 @@ impl DugksSolver {
         for c in 0..ncells {
             let rho = self.fields.rho[c];
             let u = self.fields.velocity(c);
-            let t = self.fields.temperature(c, self.gas_r, DOF);
+            let t = self.fields.temperature(c, self.gas_r, self.dof_total);
             let q = [self.fields.heat[0][c], self.fields.heat[1][c]];
             // Conservation targets: the relaxation (a local collision step) must
             // leave this cell's mass/momentum/energy EXACTLY unchanged. These
@@ -928,14 +951,9 @@ impl DugksSolver {
                 self.fields.mom[1][c],
                 self.fields.energy[c],
             );
-            let tau_c = self.collision.relaxation_time(
-                rho,
-                t,
-                self.gas_r,
-                self.mu_ref,
-                self.t_ref,
-                self.omega,
-            );
+            let mu_c = self.gas_model.viscosity(rho, t);
+            let p_c = self.gas_model.pressure(rho, t).max(f64::MIN_POSITIVE);
+            let tau_c = mu_c / p_c;
 
             // Pass 1: relax each node in place, cache the discrete equilibrium,
             // and accumulate (a) the post-relaxation moments of g1 and (b) the
@@ -951,7 +969,15 @@ impl DugksSolver {
             for k in 0..nv {
                 let v = self.dist.vgrid[k];
                 let w = self.dist.vw[k];
-                let (geq, heq) = self.collision.equilibrium(rho, u, t, self.gas_r, q, v);
+                let (geq, heq) = self.collision.equilibrium_with_dof(
+                    rho,
+                    u,
+                    t,
+                    self.gas_r,
+                    q,
+                    v,
+                    self.dof_total,
+                );
                 self.eq_g_scratch[k] = geq;
                 self.eq_h_scratch[k] = heq;
                 let idx = c * nv + k;

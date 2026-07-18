@@ -55,6 +55,7 @@
 
 use crate::bc3d::BoundaryConditionKernel3D;
 use crate::collision3d::{Collision3D, Shakhov3D};
+use crate::gas_model::{create_gas_model, GasModel};
 use crate::maxwellian3d::DOF;
 use janus_core::config::{BoundaryAssignment3D, BoundaryKind3D, CaseConfig3D, Face};
 use janus_core::distribution::Distribution3D;
@@ -89,6 +90,11 @@ pub struct DugksSolver3D {
     pub t_ref: f64,
     pub omega: f64,
     pub collision: Shakhov3D,
+    /// Total DOF from the gas model. Mirrors `DugksSolver::dof_total`.
+    pub dof_total: f64,
+    /// Gas model (EOS + transport) for this case. `Arc<dyn GasModel>` is
+    /// spec-sanctioned at the per-cell thermodynamic level (see `gas_model.rs`).
+    pub gas_model: std::sync::Arc<dyn GasModel>,
     pub dist: Distribution3D,
     dist_scratch: Distribution3D,
     pub fields: MacroFields3D,
@@ -121,6 +127,8 @@ impl DugksSolver3D {
             BoundaryKind3D::Periodic => BoundaryKindResolved::Periodic,
             _ => BoundaryKindResolved::Other,
         };
+        let gas_model = create_gas_model(&config.gas);
+        let dof_total = gas_model.total_dof();
         Self {
             grid: config.grid,
             gas_r: config.gas.r_gas,
@@ -128,6 +136,8 @@ impl DugksSolver3D {
             t_ref: config.gas.t_ref,
             omega: config.gas.vhs_omega,
             collision: Shakhov3D::new(config.gas.prandtl),
+            dof_total,
+            gas_model,
             dist,
             dist_scratch,
             fields,
@@ -236,7 +246,7 @@ impl DugksSolver3D {
 
     #[inline]
     fn safe_temperature(&self, c: usize) -> f64 {
-        let t = self.fields.temperature(c, self.gas_r, DOF);
+        let t = self.fields.temperature(c, self.gas_r, self.dof_total);
         if t.is_finite() && t > 1e-6 {
             t
         } else {
@@ -750,7 +760,7 @@ impl DugksSolver3D {
             } else {
                 [0.0; 3]
             };
-            // e = 0.5*rho*|u|^2 + 0.5*rho*DOF*R*T  =>  T = (2e/rho - |u|^2)/(DOF*R)
+            // e = 0.5*rho*|u|^2 + 0.5*rho*dof_total*R*T => T = (2e/rho - |u|^2)/(dof_total*R)
             let umag2 = u[0] * u[0] + u[1] * u[1] + u[2] * u[2];
             // Guard against a non-positive temperature (possible transiently in
             // an RK2 intermediate stage or a near-vacuum/over-depleted cell):
@@ -760,20 +770,15 @@ impl DugksSolver3D {
             // moments, so this only affects the equilibrium *shape*, not
             // conservation.
             let t = if rho > 0.0 {
-                (((2.0 * s[4] / rho) - umag2) / (DOF * self.gas_r)).max(1e-6)
+                (((2.0 * s[4] / rho) - umag2) / (self.dof_total * self.gas_r)).max(1e-6)
             } else {
                 1e-6
             };
             let q = [s[5], s[6], s[7]];
             let tgt = [s[0], s[1], s[2], s[3], s[4]];
-            let tau_c = self.collision.relaxation_time(
-                rho,
-                t,
-                self.gas_r,
-                self.mu_ref,
-                self.t_ref,
-                self.omega,
-            );
+            let mu_c = self.gas_model.viscosity(rho, t);
+            let p_c = self.gas_model.pressure(rho, t).max(f64::MIN_POSITIVE);
+            let tau_c = mu_c / p_c;
             // Thermal velocity scale used to NORMALIZE the peculiar-basis columns
             // {1, cx/sig, cy/sig, cz/sig, c^2/sig^2} so every basis function is
             // O(1) near the thermal core. Without this, the c^2 column's entries
