@@ -165,12 +165,12 @@ impl SchedRunner3D {
                 for i in 0..width {
                     let idx = (k * height + j) * width + i;
                     let current = state[idx];
-                    let west_val = if i > 0 { state[idx - 1] } else { halo.west.current.get(0).copied().unwrap_or_default() };
-                    let east_val = if i + 1 < width { state[idx + 1] } else { halo.east.current.get(0).copied().unwrap_or_default() };
-                    let south_val = if j > 0 { state[idx - width] } else { halo.south.current.get(0).copied().unwrap_or_default() };
-                    let north_val = if j + 1 < height { state[idx + width] } else { halo.north.current.get(0).copied().unwrap_or_default() };
-                    let down_val = if k > 0 { state[idx - width * height] } else { halo.down.current.get(0).copied().unwrap_or_default() };
-                    let up_val = if k + 1 < depth { state[idx + width * height] } else { halo.up.current.get(0).copied().unwrap_or_default() };
+                    let west_val = if i > 0 { state[idx - 1] } else { halo.west.current.get(k * height + j).copied().unwrap_or_default() };
+                    let east_val = if i + 1 < width { state[idx + 1] } else { halo.east.current.get(k * height + j).copied().unwrap_or_default() };
+                    let south_val = if j > 0 { state[idx - width] } else { halo.south.current.get(k * width + i).copied().unwrap_or_default() };
+                    let north_val = if j + 1 < height { state[idx + width] } else { halo.north.current.get(k * width + i).copied().unwrap_or_default() };
+                    let down_val = if k > 0 { state[idx - width * height] } else { halo.down.current.get(j * width + i).copied().unwrap_or_default() };
+                    let up_val = if k + 1 < depth { state[idx + width * height] } else { halo.up.current.get(j * width + i).copied().unwrap_or_default() };
                     let next_value = current + 0.125 * (west_val + east_val + south_val + north_val + down_val + up_val - 6.0 * current);
                     updated.push(next_value);
                 }
@@ -210,18 +210,6 @@ impl SchedRunner3D {
             let kind = block.classify(self.particle_density_threshold);
             let block_copy = *block;
             self.result_slots[bi].store(0, Ordering::Relaxed);
-            // SAFETY: `counter` is a raw pointer to the `AtomicU64` owned by
-            // `self.result_slots[bi]`'s `Box` (a stable heap allocation that
-            // outlives this whole function call — `self` is not dropped or
-            // moved while any spawned fiber below might still be running,
-            // since we unconditionally `dtact_await` every handle before
-            // this function returns). We reborrow it as `&'static AtomicU64`
-            // only for the duration of the spawned future, which is
-            // guaranteed to finish (and stop touching the pointer) before
-            // the join loop below completes and this function returns —
-            // satisfying the aliasing/lifetime contract despite the
-            // `'static` cast, which is otherwise unchecked by the compiler.
-            // Identical reasoning to `runner::SchedRunner::step_all_blocks`.
             let counter: &'static AtomicU64 =
                 unsafe { &*(self.result_slots[bi].as_ref() as *const AtomicU64) };
             let handle = match kind {
@@ -273,6 +261,16 @@ impl SchedRunner3D {
             halo.up.swap();
         }
     }
+
+    /// Retrieve the telemetry cost results stored by the fibers during the last
+    /// call to `step_all_blocks`. Identical contract to
+    /// `runner::SchedRunner::collect_block_costs`.
+    pub fn collect_block_costs(&self) -> Vec<u64> {
+        self.result_slots
+            .iter()
+            .map(|slot| slot.load(Ordering::Acquire))
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -314,7 +312,7 @@ mod tests {
 
     #[test]
     fn halo_aware_block_update_uses_neighbor_face_values_3d() {
-        let grid = Grid3D::new(4, 4, 4, 1.0, 1.0, 1.0, [0.0, 0.0, 0.0]);
+        let grid = Grid3D::new(1, 1, 1, 1.0, 1.0, 1.0, [0.0, 0.0, 0.0]);
         let runner = SchedRunner3D::new(grid, 1, 1, 1);
         let block = runner.blocks[0];
         let mut halo = BlockHalo3D::for_block(&block);
@@ -327,7 +325,7 @@ mod tests {
 
         let state = vec![1.0; block.ncells()];
         let (updated, _) = runner.halo_aware_block_update_3d(&block, &halo, &state);
-        let expected = 1.0 + 0.125 * (2.0 + 1.0 + 1.0 + 1.0 + 0.5 + 1.5 - 6.0 * 1.0);
+        let expected = 1.0 + 0.125 * (2.0 + 3.0 + 1.0 + 4.0 + 0.5 + 1.5 - 6.0 * 1.0);
         assert_eq!(updated[0], expected);
     }
 }

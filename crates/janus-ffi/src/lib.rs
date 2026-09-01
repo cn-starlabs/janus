@@ -807,6 +807,7 @@ mod tests {
             janus_core::config::BoundaryKind::DiffuseWall {
                 temperature,
                 wall_velocity,
+                ..
             } => {
                 assert!((temperature - 400.0).abs() < 1e-12);
                 assert_eq!(wall_velocity, [2.0, 0.0]);

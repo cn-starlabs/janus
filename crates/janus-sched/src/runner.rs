@@ -571,4 +571,93 @@ mod tests {
         assert_eq!(sample.west.len(), block.j1 - block.j0);
         assert_eq!(sample.east.len(), block.j1 - block.j0);
     }
+
+    #[test]
+    fn test_multiblock_vs_single_domain_conservation() {
+        let grid = Grid2D::new(8, 8, 1.0, 1.0, [0.0, 0.0]);
+        let nx = grid.nx;
+        let ny = grid.ny;
+
+        // Initialize a non-uniform global state.
+        let mut global_state = vec![0.0; nx * ny];
+        for j in 0..ny {
+            for i in 0..nx {
+                global_state[j * nx + i] = (j * nx + i) as f64 * 0.1;
+            }
+        }
+
+        // Create the multi-block runner.
+        let mut runner = SchedRunner::new(grid, 2, 2);
+
+        // Partition global state into blocks.
+        let mut block_states = vec![Vec::new(); runner.blocks.len()];
+        for (bi, block) in runner.blocks.iter().enumerate() {
+            let width = block.i1 - block.i0;
+            let height = block.j1 - block.j0;
+            let mut bstate = vec![0.0; width * height];
+            for bj in 0..height {
+                for bi_loc in 0..width {
+                    let gx = block.i0 + bi_loc;
+                    let gy = block.j0 + bj;
+                    bstate[bj * width + bi_loc] = global_state[gy * nx + gx];
+                }
+            }
+            block_states[bi] = bstate;
+        }
+
+        // Run 10 steps.
+        for _step in 0..10 {
+            // 1. Reference update on global_state
+            let mut next_global = vec![0.0; nx * ny];
+            for gy in 0..ny {
+                for gx in 0..nx {
+                    let g_idx = gy * nx + gx;
+                    let current = global_state[g_idx];
+                    let west_val = if gx > 0 { global_state[g_idx - 1] } else { 0.0 };
+                    let east_val = if gx + 1 < nx { global_state[g_idx + 1] } else { 0.0 };
+                    let south_val = if gy > 0 { global_state[g_idx - nx] } else { 0.0 };
+                    let north_val = if gy + 1 < ny { global_state[g_idx + nx] } else { 0.0 };
+                    next_global[g_idx] = current + 0.25 * (west_val + east_val + south_val + north_val - 4.0 * current);
+                }
+            }
+            global_state = next_global;
+
+            // 2. Multi-block update
+            let mut next_block_states = vec![Vec::new(); runner.blocks.len()];
+            let mut samples = vec![HaloSample::default(); runner.blocks.len()];
+            for (bi, block) in runner.blocks.iter().enumerate() {
+                let (updated, sample) = runner.halo_aware_block_update(
+                    block,
+                    &runner.halos[bi],
+                    &block_states[bi],
+                );
+                next_block_states[bi] = updated;
+                samples[bi] = sample;
+            }
+            runner.publish_halo_samples(&samples);
+            runner.swap_halo_buffers();
+            block_states = next_block_states;
+        }
+
+        // Reconstruct global state from blocks.
+        let mut reconstructed_state = vec![0.0; nx * ny];
+        for (bi, block) in runner.blocks.iter().enumerate() {
+            let width = block.i1 - block.i0;
+            let height = block.j1 - block.j0;
+            let bstate = &block_states[bi];
+            for bj in 0..height {
+                for bi_loc in 0..width {
+                    let gx = block.i0 + bi_loc;
+                    let gy = block.j0 + bj;
+                    reconstructed_state[gy * nx + gx] = bstate[bj * width + bi_loc];
+                }
+            }
+        }
+
+        // Compare values.
+        for idx in 0..(nx * ny) {
+            let diff = (reconstructed_state[idx] - global_state[idx]).abs();
+            assert!(diff < 1e-12, "Mismatch at global index {idx}: reconstructed={}, global={}", reconstructed_state[idx], global_state[idx]);
+        }
+    }
 }
